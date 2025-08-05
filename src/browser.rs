@@ -1,5 +1,5 @@
 use anyhow::{Context, Error, Result};
-use base64::{Engine, engine::general_purpose};
+use base64::{Engine as _, engine::general_purpose};
 use chromiumoxide::cdp::browser_protocol::network::{EnableParams, EventRequestWillBeSent};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
@@ -10,8 +10,9 @@ use tracing::info;
 use url::form_urlencoded;
 use urlencoding;
 
+use crate::constants::AWS_SAML_ENDPOINT;
+
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
-const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
 pub async fn authenticate(
     saml_request: &str,
@@ -208,7 +209,7 @@ mod tests {
         assert_eq!(try_decode_and_parse(""), None);
 
         // Base64デコード後が不正なUTF-8（バイナリデータ）
-        let invalid_utf8 = general_purpose::STANDARD.encode(&[0xFF, 0xFE, 0xFD]);
+        let invalid_utf8 = general_purpose::STANDARD.encode([0xFF, 0xFE, 0xFD]);
         assert_eq!(try_decode_and_parse(&invalid_utf8), None);
     }
 

@@ -1,8 +1,5 @@
 use dirs;
-use std::{
-    env,
-    path::{Path, PathBuf},
-};
+use std::{env, path::PathBuf};
 
 /// Default configuration directory name under user's config directory
 pub const CONFIG_DIR_NAME: &str = "assam";
@@ -16,8 +13,11 @@ pub const AWS_CONFIG_DIR_NAME: &str = ".aws";
 /// AWS configuration file name
 pub const AWS_CONFIG_FILE_NAME: &str = "config";
 
-/// Default App ID URI for AWS SAML
+/// Default App ID URI for AWS SAML (used as Issuer in SAML request)
 pub const DEFAULT_APP_ID_URI: &str = "https://signin.aws.amazon.com/saml";
+
+/// AWS SAML endpoint URL (where SAML response is posted)
+pub const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
 /// Minimum session duration in hours
 pub const MIN_SESSION_DURATION_HOURS: u8 = 1;
@@ -61,15 +61,6 @@ pub fn get_aws_config_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(AWS_CONFIG_DIR_NAME).join(AWS_CONFIG_FILE_NAME))
 }
 
-/// Build a path in an OS-independent way
-pub fn build_path<P: AsRef<Path>>(base: P, components: &[&str]) -> PathBuf {
-    let mut path = base.as_ref().to_path_buf();
-    for component in components {
-        path = path.join(component);
-    }
-    path
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,17 +73,6 @@ mod tests {
         let path_str = dir.to_string_lossy();
         assert!(path_str.contains(CONFIG_DIR_NAME));
         assert!(path_str.contains(CHROME_USER_DATA_DIR_NAME));
-    }
-
-    #[test]
-    fn test_build_path() {
-        let base = PathBuf::from("/home/user");
-        let path = build_path(&base, &["config", "assam", "chrome"]);
-
-        // Use Path::join for comparison to ensure OS-independent path handling
-        let expected = base.join("config").join("assam").join("chrome");
-
-        assert_eq!(path, expected);
     }
 
     #[test]

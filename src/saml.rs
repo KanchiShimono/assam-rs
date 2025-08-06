@@ -7,6 +7,15 @@ use quick_xml::events::{BytesStart, Event};
 use std::io::Write;
 use uuid::Uuid;
 
+/// Result of SAML role selection containing AWS ARNs
+#[derive(Debug, Clone)]
+pub struct SelectedRole {
+    /// ARN of the IAM role to assume
+    pub role_arn: String,
+    /// ARN of the SAML provider principal
+    pub principal_arn: String,
+}
+
 /// Generate SAML authentication request
 pub fn create_request(app_id_uri: &str) -> Result<String> {
     let id = format!("id_{}", Uuid::new_v4());
@@ -42,7 +51,7 @@ fn encode_saml_request(xml: &str) -> Result<String> {
 pub fn extract_role_from_response(
     base64_response: &str,
     role_name: Option<&str>,
-) -> Result<(String, String)> {
+) -> Result<SelectedRole> {
     let decoded = general_purpose::STANDARD
         .decode(base64_response)
         .context("Failed to decode SAML response from base64")?;
@@ -72,7 +81,10 @@ pub fn extract_role_from_response(
         );
     };
 
-    Ok((selected.role_arn.clone(), selected.principal_arn.clone()))
+    Ok(SelectedRole {
+        role_arn: selected.role_arn.clone(),
+        principal_arn: selected.principal_arn.clone(),
+    })
 }
 
 #[derive(Debug, Clone)]

@@ -40,9 +40,7 @@ mod tests {
         for pattern in expected_patterns {
             assert!(
                 result.contains(pattern),
-                "Expected pattern '{}' not found in {} completion script",
-                pattern,
-                shell
+                "Expected pattern '{pattern}' not found in {shell} completion script"
             );
         }
 
@@ -91,23 +89,19 @@ mod tests {
 
             assert!(
                 result.contains("auth"),
-                "auth command should be in {} completions",
-                shell
+                "auth command should be in {shell} completions"
             );
             assert!(
                 result.contains("configure"),
-                "configure command should be in {} completions",
-                shell
+                "configure command should be in {shell} completions"
             );
             assert!(
                 result.contains("web"),
-                "web command should be in {} completions",
-                shell
+                "web command should be in {shell} completions"
             );
             assert!(
                 result.contains("completions"),
-                "completions command should be in {} completions",
-                shell
+                "completions command should be in {shell} completions"
             );
         }
     }
@@ -143,8 +137,7 @@ mod tests {
 
             assert!(
                 result.is_ascii() || result.chars().all(|c| c.is_ascii() || c.len_utf8() > 1),
-                "Completion script for {} should be valid UTF-8",
-                shell
+                "Completion script for {shell} should be valid UTF-8"
             );
         }
     }

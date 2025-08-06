@@ -61,6 +61,18 @@ pub fn get_aws_config_path() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(AWS_CONFIG_DIR_NAME).join(AWS_CONFIG_FILE_NAME))
 }
 
+/// Get the AWS credentials file path
+/// Respects AWS_SHARED_CREDENTIALS_FILE environment variable if set
+pub fn get_aws_credentials_path() -> Option<PathBuf> {
+    // Check environment variable first
+    if let Ok(path) = env::var("AWS_SHARED_CREDENTIALS_FILE") {
+        return Some(PathBuf::from(path));
+    }
+
+    // Use default AWS credentials location
+    dirs::home_dir().map(|home| home.join(AWS_CONFIG_DIR_NAME).join("credentials"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,19 +90,27 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_aws_config_path_with_env() {
+        let original = env::var("AWS_CONFIG_FILE").ok();
+
         unsafe {
             env::set_var("AWS_CONFIG_FILE", "/custom/aws/config");
         }
         let path = get_aws_config_path();
         assert_eq!(path, Some(PathBuf::from("/custom/aws/config")));
+
         unsafe {
-            env::remove_var("AWS_CONFIG_FILE");
+            match original {
+                Some(val) => env::set_var("AWS_CONFIG_FILE", val),
+                None => env::remove_var("AWS_CONFIG_FILE"),
+            }
         }
     }
 
     #[test]
     #[serial]
     fn test_get_aws_config_path_default() {
+        let original = env::var("AWS_CONFIG_FILE").ok();
+
         unsafe {
             env::remove_var("AWS_CONFIG_FILE");
         }
@@ -100,6 +120,54 @@ mod tests {
             let path_str = p.to_string_lossy();
             assert!(path_str.contains(AWS_CONFIG_DIR_NAME));
             assert!(path_str.contains(AWS_CONFIG_FILE_NAME));
+        }
+
+        unsafe {
+            if let Some(val) = original {
+                env::set_var("AWS_CONFIG_FILE", val);
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_aws_credentials_path_with_env() {
+        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+
+        unsafe {
+            env::set_var("AWS_SHARED_CREDENTIALS_FILE", "/custom/path/credentials");
+        }
+        let path = get_aws_credentials_path();
+        assert_eq!(path, Some(PathBuf::from("/custom/path/credentials")));
+
+        unsafe {
+            match original {
+                Some(val) => env::set_var("AWS_SHARED_CREDENTIALS_FILE", val),
+                None => env::remove_var("AWS_SHARED_CREDENTIALS_FILE"),
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_aws_credentials_path_default() {
+        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+
+        unsafe {
+            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+        }
+        let path = get_aws_credentials_path();
+
+        if let Some(p) = path {
+            let path_str = p.to_string_lossy();
+            assert!(path_str.contains(AWS_CONFIG_DIR_NAME));
+            assert!(path_str.contains("credentials"));
+        }
+
+        unsafe {
+            if let Some(val) = original {
+                env::set_var("AWS_SHARED_CREDENTIALS_FILE", val);
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
-use aws_config::Region;
-use aws_sdk_sts::{Client as StsClient, config::Config as StsConfig};
+use aws_config::BehaviorVersion;
+use aws_sdk_sts::Client as StsClient;
 use aws_smithy_types::{DateTime, date_time::Format};
 use ini::Ini;
 use reqwest;
@@ -11,7 +11,7 @@ use tokio::fs;
 use tracing::{debug, info};
 use url::Url;
 
-use crate::constants;
+use crate::constants::{self, DEFAULT_AWS_REGION};
 
 #[derive(Debug, Clone)]
 pub struct Credentials {
@@ -44,19 +44,46 @@ struct SigninTokenResponse {
 
 /// Assume role using SAML assertion
 pub async fn assume_role_with_saml(
+    profile: &str,
+    saml_assertion: &str,
     role_arn: &str,
     principal_arn: &str,
-    saml_assertion: &str,
     duration_seconds: i32,
 ) -> Result<Credentials> {
     info!("Calling AWS STS AssumeRoleWithSAML");
+    debug!("Profile: {}", profile);
     debug!("Role ARN: {}", role_arn);
     debug!("Principal ARN: {}", principal_arn);
     debug!("Duration: {} seconds", duration_seconds);
 
-    let region = Region::new("us-east-1");
-    let config = StsConfig::builder().region(region).build();
-    let client = StsClient::from_conf(config);
+    // Load AWS config with automatic region fallback
+    // Priority: ENV vars -> Config file -> EC2 metadata -> DEFAULT_AWS_REGION
+    let config = {
+        let loaded = aws_config::defaults(BehaviorVersion::latest())
+            .profile_name(profile)
+            .load()
+            .await;
+
+        match loaded.region() {
+            Some(region) => {
+                info!("Using region: {}", region);
+                loaded
+            }
+            None => {
+                info!(
+                    "No region configured, using default {} for STS",
+                    DEFAULT_AWS_REGION
+                );
+                aws_config::defaults(BehaviorVersion::latest())
+                    .profile_name(profile)
+                    .region(aws_config::Region::new(DEFAULT_AWS_REGION))
+                    .load()
+                    .await
+            }
+        }
+    };
+
+    let client = StsClient::new(&config);
 
     let response = client
         .assume_role_with_saml()
@@ -176,7 +203,19 @@ pub async fn load_credentials(profile: &str) -> Result<Credentials> {
 /// Open AWS Management Console in browser
 pub async fn open_console(profile: &str) -> Result<()> {
     let creds = load_credentials(profile).await?;
-    let url = generate_console_url(&creds, None).await?;
+
+    // Load AWS config to get the region for this profile
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .profile_name(profile)
+        .load()
+        .await;
+
+    // Use the configured region or default to DEFAULT_AWS_REGION
+    let region = config
+        .region()
+        .map(|r| r.as_ref())
+        .or(Some(DEFAULT_AWS_REGION));
+    let url = generate_console_url(&creds, region).await?;
     open_browser(&url)?;
 
     info!("Opened AWS Management Console in browser");
@@ -186,7 +225,7 @@ pub async fn open_console(profile: &str) -> Result<()> {
 /// Generate AWS Management Console URL
 async fn generate_console_url(creds: &Credentials, region: Option<&str>) -> Result<String> {
     // Determine AWS domain based on region
-    let region = region.unwrap_or("us-east-1");
+    let region = region.unwrap_or(DEFAULT_AWS_REGION);
     let amazon_domain = get_console_domain(region);
 
     // Get signin token

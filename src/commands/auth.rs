@@ -45,9 +45,10 @@ impl AuthCommand {
 
         // Get AWS credentials
         let credentials = aws::assume_role_with_saml(
+            profile,
+            &saml_response,
             &role_arn,
             &principal_arn,
-            &saml_response,
             i32::from(config.default_session_duration_hours) * 3600,
         )
         .await

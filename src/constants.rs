@@ -28,6 +28,9 @@ pub const MAX_SESSION_DURATION_HOURS: u8 = 12;
 /// Default session duration in hours
 pub const DEFAULT_SESSION_DURATION_HOURS: u8 = 1;
 
+/// Default AWS region for STS operations when no region is configured
+pub const DEFAULT_AWS_REGION: &str = "us-east-1";
+
 /// Get the default Chrome user data directory path
 /// Always returns: ~/.config/assam/chrome-user-data (on all platforms)
 pub fn default_chrome_user_data_dir() -> PathBuf {

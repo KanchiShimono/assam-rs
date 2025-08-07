@@ -38,10 +38,6 @@ jobs:
             os: windows-latest
             name: assam-x86_64-pc-windows-msvc.zip
 
-          - target: i686-pc-windows-msvc
-            os: windows-latest
-            name: assam-i686-pc-windows-msvc.zip
-
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             name: assam-aarch64-pc-windows-msvc.zip
@@ -52,6 +48,10 @@ jobs:
 
       - name: Setup | Add target
         run: rustup target add ${{ matrix.target }}
+
+      - name: Setup | Install musl-tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build | Binary
         run: cargo build --release --locked --target ${{ matrix.target }}

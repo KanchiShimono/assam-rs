@@ -1,7 +1,14 @@
 [package]
 name = "assam"
-version = "0.0.1"
+version = "0.0.1-alpha.1"
 edition = "2024"
+authors = ["Kanchi Shimono"]
+description = "AWS SAML authentication CLI tool for Azure Entra ID"
+repository = "https://github.com/KanchiShimono/assam-rs"
+homepage = "https://github.com/KanchiShimono/assam-rs"
+keywords = ["aws", "saml", "azure", "authentication", "cli"]
+categories = ["command-line-utilities", "authentication"]
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.98"

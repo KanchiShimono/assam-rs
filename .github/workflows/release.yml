@@ -79,8 +79,12 @@ jobs:
           $hash = Get-FileHash -Path "${{ matrix.name }}" -Algorithm SHA256
           "$($hash.Hash.ToLower())  ${{ matrix.name }}" | Out-File -FilePath "${{ matrix.name }}.sha256" -NoNewline
 
-      - name: Post Build | Generate checksums [-nix]
-        if: "!startsWith(matrix.os, 'windows-')"
+      - name: Post Build | Generate checksums [macOS]
+        if: startsWith(matrix.os, 'macos-')
+        run: shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
+
+      - name: Post Build | Generate checksums [Linux]
+        if: startsWith(matrix.os, 'ubuntu-')
         run: sha256sum ${{ matrix.name }} > ${{ matrix.name }}.sha256
 
       - name: Post Build | Upload artifacts

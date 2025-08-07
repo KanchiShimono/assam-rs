@@ -1,0 +1,108 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: assam-x86_64-unknown-linux-gnu.tar.gz
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: assam-x86_64-unknown-linux-musl.tar.gz
+
+          - target: aarch64-apple-darwin
+            os: macOS-latest
+            name: assam-aarch64-apple-darwin.tar.gz
+
+          - target: x86_64-apple-darwin
+            os: macOS-latest
+            name: assam-x86_64-apple-darwin.tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: assam-x86_64-pc-windows-msvc.zip
+
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            name: assam-i686-pc-windows-msvc.zip
+
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: assam-aarch64-pc-windows-msvc.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup | Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build | Binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Post Build | Prepare artifacts [Windows]
+        if: startsWith(matrix.os, 'windows-')
+        run: |
+          cd target/${{ matrix.target }}/release
+          strip assam.exe
+          7z a ../../../${{ matrix.name }} assam.exe
+          cd -
+
+      - name: Post Build | Prepare artifacts [-nix]
+        if: "!startsWith(matrix.os, 'windows-')"
+        run: |
+          cd target/${{ matrix.target }}/release
+          strip assam || true
+          tar czvf ../../../${{ matrix.name }} assam
+          cd -
+
+      - name: Post Build | Upload artifacts
+        if: ${{ github.ref_type == 'tag' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Download artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+
+      - name: Setup | List artifacts
+        run: ls -laR dist/
+
+      - name: Setup | Release name
+        id: release_name
+        run: echo "name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build | Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
+        with:
+          name: ${{ steps.release_name.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          files: dist/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true

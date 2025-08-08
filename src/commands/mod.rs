@@ -1,9 +1,9 @@
 pub mod auth;
 pub mod completion;
-pub mod configure;
+pub mod config;
 pub mod web;
 
 pub use auth::AuthCommand;
 pub use completion::CompletionCommand;
-pub use configure::ConfigureCommand;
+pub use config::ConfigCommand;
 pub use web::WebCommand;

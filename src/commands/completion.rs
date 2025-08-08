@@ -92,8 +92,8 @@ mod tests {
                 "auth command should be in {shell} completion"
             );
             assert!(
-                result.contains("configure"),
-                "configure command should be in {shell} completion"
+                result.contains("config"),
+                "config command should be in {shell} completion"
             );
             assert!(
                 result.contains("web"),

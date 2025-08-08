@@ -5,12 +5,12 @@ use std::io;
 use crate::cli::Cli;
 
 #[derive(Debug, Clone, Args)]
-pub struct CompletionsCommand {
+pub struct CompletionCommand {
     #[arg(value_enum, help = "Target shell for completion script")]
     pub shell: Shell,
 }
 
-impl CompletionsCommand {
+impl CompletionCommand {
     pub fn execute(self) {
         let mut cmd = Cli::command();
         let app_name = cmd.get_name().to_string();
@@ -32,7 +32,7 @@ mod tests {
     use super::*;
 
     fn validate_shell_completion(shell: Shell, expected_patterns: &[&str]) {
-        let cmd = CompletionsCommand { shell };
+        let cmd = CompletionCommand { shell };
         let result = cmd.generate_to_string();
 
         assert!(!result.is_empty(), "Completion script should not be empty");
@@ -84,40 +84,40 @@ mod tests {
         let shells = [Shell::Bash, Shell::Zsh, Shell::Fish];
 
         for shell in &shells {
-            let cmd = CompletionsCommand { shell: *shell };
+            let cmd = CompletionCommand { shell: *shell };
             let result = cmd.generate_to_string();
 
             assert!(
                 result.contains("auth"),
-                "auth command should be in {shell} completions"
+                "auth command should be in {shell} completion"
             );
             assert!(
                 result.contains("configure"),
-                "configure command should be in {shell} completions"
+                "configure command should be in {shell} completion"
             );
             assert!(
                 result.contains("web"),
-                "web command should be in {shell} completions"
+                "web command should be in {shell} completion"
             );
             assert!(
-                result.contains("completions"),
-                "completions command should be in {shell} completions"
+                result.contains("completion"),
+                "completion command should be in {shell} completion"
             );
         }
     }
 
     #[test]
     fn test_completion_contains_global_options() {
-        let cmd = CompletionsCommand { shell: Shell::Bash };
+        let cmd = CompletionCommand { shell: Shell::Bash };
         let result = cmd.generate_to_string();
 
         assert!(
             result.contains("--profile") || result.contains("-p"),
-            "Profile option should be in completions"
+            "Profile option should be in completion"
         );
         assert!(
             result.contains("--help") || result.contains("-h"),
-            "Help option should be in completions"
+            "Help option should be in completion"
         );
     }
 
@@ -132,7 +132,7 @@ mod tests {
         ];
 
         for shell in &shells {
-            let cmd = CompletionsCommand { shell: *shell };
+            let cmd = CompletionCommand { shell: *shell };
             let result = cmd.generate_to_string();
 
             assert!(

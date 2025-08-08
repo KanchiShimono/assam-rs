@@ -22,12 +22,18 @@ pub async fn authenticate(
     info!("Starting browser authentication flow");
 
     let mut browser = launch_browser(user_data_dir).await?;
-    let result = capture_saml_response(&browser, saml_request, tenant_id).await;
-    browser.close().await.ok();
 
-    time::timeout(BROWSER_TIMEOUT, async move { result })
-        .await
-        .context("Authentication timed out")?
+    let result = time::timeout(
+        BROWSER_TIMEOUT,
+        capture_saml_response(&browser, saml_request, tenant_id),
+    )
+    .await
+    .context("Authentication timed out")??;
+
+    browser.close().await.ok();
+    browser.wait().await.ok();
+
+    Ok(result)
 }
 
 async fn launch_browser(user_data_dir: &Path) -> Result<Browser> {

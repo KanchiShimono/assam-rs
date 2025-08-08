@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
 
-use crate::commands::{AuthCommand, CompletionCommand, ConfigureCommand, WebCommand};
+use crate::commands::{AuthCommand, CompletionCommand, ConfigCommand, WebCommand};
 
 #[derive(Debug, Clone, Parser)]
 #[command(name = "assam", version, about = "AWS SAML authentication tool for Azure Entra ID", long_about = None, arg_required_else_help = false)]
@@ -27,7 +27,7 @@ pub enum Commands {
     #[command(about = "Authenticate with AWS using SAML via Azure Entra ID")]
     Auth(AuthCommand),
     #[command(about = "Configure Azure Entra ID and AWS settings")]
-    Configure(ConfigureCommand),
+    Config(ConfigCommand),
     #[command(about = "Open AWS Management Console in browser")]
     Web(WebCommand),
     #[command(about = "Generate shell completion script for assam")]
@@ -43,7 +43,7 @@ impl Cli {
 
         match command {
             Commands::Auth(cmd) => cmd.execute(&profile).await,
-            Commands::Configure(cmd) => cmd.execute(&profile).await,
+            Commands::Config(cmd) => cmd.execute(&profile).await,
             Commands::Web(cmd) => cmd.execute(&profile).await,
             Commands::Completion(cmd) => {
                 cmd.execute();
@@ -150,9 +150,9 @@ mod tests {
     }
 
     #[test]
-    fn test_configure_command_parsing() {
-        let cli = Cli::try_parse_from(["assam", "configure"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Configure(_))));
+    fn test_config_command_parsing() {
+        let cli = Cli::try_parse_from(["assam", "config"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Config(_))));
     }
 
     #[test]

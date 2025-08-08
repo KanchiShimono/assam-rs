@@ -23,7 +23,7 @@ Download the binary from the [releases page](https://github.com/KanchiShimono/as
 
 ### 1. Initial Setup (first time only)
 ```bash
-assam configure
+assam config
 ```
 Configure your Azure Tenant ID and other settings interactively.
 
@@ -49,7 +49,7 @@ assam web
 | Command | Description | Example |
 |---------|------|-----|
 | `auth` | AWS authentication (default) | `assam` or `assam auth` |
-| `configure` | Configure profile | `assam configure -p prod` |
+| `config` | Configure profile | `assam config -p prod` |
 | `web` | Open AWS console | `assam web -p prod` |
 | `completion` | Shell completion | `assam completion bash` |
 
@@ -61,8 +61,8 @@ assam web
 
 ```bash
 # Create profiles for each environment
-assam configure -p dev
-assam configure -p prod
+assam config -p dev
+assam config -p prod
 
 # Authenticate with specific profiles
 assam -p dev
@@ -76,7 +76,7 @@ aws s3 ls --profile dev
 
 ### Profile not found
 ```bash
-assam configure -p <profile-name>
+assam config -p <profile-name>
 ```
 
 ### Authentication fails

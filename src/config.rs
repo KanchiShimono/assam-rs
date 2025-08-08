@@ -58,7 +58,7 @@ impl Config {
 pub async fn load(profile: &str) -> Result<Config> {
     let path = get_config_path()?;
     let ini = Ini::load_from_file(&path)
-        .context("Failed to load config file. Please run `assam configure` first")?;
+        .context("Failed to load config file. Please run `assam config` first")?;
 
     let section_name = if profile == "default" {
         profile.to_string()

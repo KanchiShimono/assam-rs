@@ -18,7 +18,7 @@ impl AuthCommand {
         // Load configuration
         let config = config::load(profile)
             .await
-            .with_context(|| format!("Failed to load configuration for profile '{profile}'. Please run 'assam configure' first."))?;
+            .with_context(|| format!("Failed to load configuration for profile '{profile}'. Please run 'assam config' first."))?;
 
         // Generate SAML request
         let saml_request =

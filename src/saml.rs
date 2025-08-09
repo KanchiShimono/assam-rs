@@ -7,6 +7,28 @@ use quick_xml::events::{BytesStart, Event};
 use std::io::Write;
 use uuid::Uuid;
 
+/// SAML provider configuration
+#[derive(Debug, Clone)]
+pub struct SamlProviderConfig {
+    /// The entity that issues the SAML request (typically the application identifier)
+    pub issuer: String,
+    /// The URL where SAML responses should be sent (Assertion Consumer Service URL)
+    pub assertion_consumer_service_url: String,
+    /// The attribute name for roles in the SAML response
+    pub role_attribute_name: String,
+}
+
+impl SamlProviderConfig {
+    /// Create AWS SAML provider configuration with the specified issuer
+    pub fn aws(issuer: String) -> Self {
+        Self {
+            issuer,
+            assertion_consumer_service_url: crate::constants::AWS_SAML_ENDPOINT.to_string(),
+            role_attribute_name: crate::constants::AWS_SAML_ROLE_ATTRIBUTE.to_string(),
+        }
+    }
+}
+
 /// Result of SAML role selection containing AWS ARNs
 #[derive(Debug, Clone)]
 pub struct SelectedRole {
@@ -17,21 +39,22 @@ pub struct SelectedRole {
 }
 
 /// Generate SAML authentication request
-pub fn create_request(app_id_uri: &str) -> Result<String> {
+pub fn create_request(provider_config: &SamlProviderConfig) -> Result<String> {
     let id = format!("id_{}", Uuid::new_v4());
     let instant = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
 
     let xml = format!(
         r#"<samlp:AuthnRequest
-  AssertionConsumerServiceURL="https://signin.aws.amazon.com/saml"
+  AssertionConsumerServiceURL="{}"
   ID="{id}"
   IssueInstant="{instant}"
   ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
   Version="2.0"
   xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
-  <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">{app_id_uri}</saml:Issuer>
+  <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">{}</saml:Issuer>
   <samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" />
-</samlp:AuthnRequest>"#
+</samlp:AuthnRequest>"#,
+        provider_config.assertion_consumer_service_url, provider_config.issuer
     );
 
     encode_saml_request(&xml).context("Failed to encode SAML request")
@@ -51,12 +74,13 @@ fn encode_saml_request(xml: &str) -> Result<String> {
 pub fn extract_role_from_response(
     base64_response: &str,
     role_name: Option<&str>,
+    provider_config: &SamlProviderConfig,
 ) -> Result<SelectedRole> {
     let decoded = general_purpose::STANDARD
         .decode(base64_response)
         .context("Failed to decode SAML response from base64")?;
 
-    let roles = parse_roles_from_saml(&decoded)?;
+    let roles = parse_roles_from_saml(&decoded, &provider_config.role_attribute_name)?;
 
     if roles.is_empty() {
         bail!("No roles found in SAML response");
@@ -121,7 +145,7 @@ impl Role {
     }
 }
 
-fn parse_roles_from_saml(xml_data: &[u8]) -> Result<Vec<Role>> {
+fn parse_roles_from_saml(xml_data: &[u8], role_attribute_name: &str) -> Result<Vec<Role>> {
     let mut reader = Reader::from_reader(xml_data);
     reader.config_mut().trim_text(true);
 
@@ -133,7 +157,7 @@ fn parse_roles_from_saml(xml_data: &[u8]) -> Result<Vec<Role>> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 if e.name().as_ref() == b"saml2:Attribute" || e.name().as_ref() == b"Attribute" {
-                    in_role_attribute = check_role_attribute(e);
+                    in_role_attribute = check_role_attribute(e, role_attribute_name);
                 }
             }
             Ok(Event::Text(e)) if in_role_attribute => {
@@ -157,10 +181,9 @@ fn parse_roles_from_saml(xml_data: &[u8]) -> Result<Vec<Role>> {
     Ok(roles)
 }
 
-fn check_role_attribute(e: &BytesStart) -> bool {
+fn check_role_attribute(e: &BytesStart, role_attribute_name: &str) -> bool {
     e.attributes().filter_map(Result::ok).any(|attr| {
-        attr.key.as_ref() == b"Name"
-            && attr.value.as_ref() == b"https://aws.amazon.com/SAML/Attributes/Role"
+        attr.key.as_ref() == b"Name" && attr.value.as_ref() == role_attribute_name.as_bytes()
     })
 }
 
@@ -170,7 +193,23 @@ mod tests {
 
     #[test]
     fn test_create_request() {
-        let request = create_request("https://example.com/saml").unwrap();
+        let provider_config = SamlProviderConfig::aws("https://example.com/saml".to_string());
+        let request = create_request(&provider_config).unwrap();
+        assert!(!request.is_empty());
+
+        // Verify it's valid base64
+        let decoded = general_purpose::STANDARD.decode(&request);
+        assert!(decoded.is_ok());
+    }
+
+    #[test]
+    fn test_create_request_with_custom_provider() {
+        let provider_config = SamlProviderConfig {
+            issuer: "https://example.com/saml".to_string(),
+            assertion_consumer_service_url: "https://custom.provider.com/saml".to_string(),
+            role_attribute_name: "https://custom.provider.com/Attributes/Role".to_string(),
+        };
+        let request = create_request(&provider_config).unwrap();
         assert!(!request.is_empty());
 
         // Verify it's valid base64

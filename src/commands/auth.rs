@@ -21,8 +21,9 @@ impl AuthCommand {
             .with_context(|| format!("Failed to load configuration for profile '{profile}'. Please run 'assam config' first."))?;
 
         // Generate SAML request
+        let provider_config = saml::SamlProviderConfig::aws(config.app_id_uri.clone());
         let saml_request =
-            saml::create_request(&config.app_id_uri).context("Failed to create SAML request")?;
+            saml::create_request(&provider_config).context("Failed to create SAML request")?;
 
         info!("Opening browser for Azure Entra ID authentication...");
         println!("Please complete authentication in the browser window.");
@@ -37,8 +38,12 @@ impl AuthCommand {
         .context("Failed to complete browser authentication")?;
 
         // Extract role information from SAML response
-        let selected_role = saml::extract_role_from_response(&saml_response, self.role.as_deref())
-            .context("Failed to extract role information from SAML response")?;
+        let selected_role = saml::extract_role_from_response(
+            &saml_response,
+            self.role.as_deref(),
+            &provider_config,
+        )
+        .context("Failed to extract role information from SAML response")?;
 
         info!(
             "Requesting AWS credentials for role: {}",

@@ -37,13 +37,13 @@ impl AuthCommand {
         .await
         .context("Failed to complete browser authentication")?;
 
-        // Extract role information from SAML response
-        let selected_role = saml::extract_role_from_response(
-            &saml_response,
-            self.role.as_deref(),
-            &provider_config,
-        )
-        .context("Failed to extract role information from SAML response")?;
+        // Parse available roles from SAML response
+        let roles = saml::parse_roles(&saml_response, &provider_config)
+            .context("Failed to parse roles from SAML response")?;
+
+        // Select the appropriate role
+        let selected_role =
+            saml::select_role(&roles, self.role.as_deref()).context("Failed to select role")?;
 
         info!(
             "Requesting AWS credentials for role: {}",

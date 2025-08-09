@@ -38,6 +38,44 @@ pub struct SelectedRole {
     pub principal_arn: String,
 }
 
+/// Represents an AWS role from SAML response
+#[derive(Debug, Clone)]
+pub struct Role {
+    /// Role name extracted from ARN
+    pub name: String,
+    /// Full ARN of the IAM role
+    pub role_arn: String,
+    /// Full ARN of the SAML provider principal
+    pub principal_arn: String,
+}
+
+impl Role {
+    fn from_arn_pair(arn_pair: &str) -> Option<Self> {
+        let parts: Vec<&str> = arn_pair.split(',').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        let (role_arn, principal_arn) = if parts[0].contains(":role/") {
+            (parts[0].to_string(), parts[1].to_string())
+        } else {
+            (parts[1].to_string(), parts[0].to_string())
+        };
+
+        // Extract role name from ARN (arn:aws:iam::123456789012:role/RoleName)
+        let name = role_arn
+            .split('/')
+            .next_back()
+            .map_or_else(|| "UnknownRole".to_string(), String::from);
+
+        Some(Role {
+            name,
+            role_arn,
+            principal_arn,
+        })
+    }
+}
+
 /// Generate SAML authentication request
 pub fn create_request(provider_config: &SamlProviderConfig) -> Result<String> {
     let id = format!("id_{}", Uuid::new_v4());
@@ -70,12 +108,11 @@ fn encode_saml_request(xml: &str) -> Result<String> {
     Ok(general_purpose::STANDARD.encode(compressed))
 }
 
-/// Extract role information from SAML response
-pub fn extract_role_from_response(
+/// Parse all available roles from a SAML response
+pub fn parse_roles(
     base64_response: &str,
-    role_name: Option<&str>,
     provider_config: &SamlProviderConfig,
-) -> Result<SelectedRole> {
+) -> Result<Vec<Role>> {
     let decoded = general_purpose::STANDARD
         .decode(base64_response)
         .context("Failed to decode SAML response from base64")?;
@@ -86,12 +123,23 @@ pub fn extract_role_from_response(
         bail!("No roles found in SAML response");
     }
 
-    // Select role based on name or use first available
+    Ok(roles)
+}
+
+/// Select a specific role from available roles
+pub fn select_role(roles: &[Role], role_name: Option<&str>) -> Result<SelectedRole> {
     let selected = if let Some(name) = role_name {
-        roles
-            .iter()
-            .find(|r| r.name == name)
-            .with_context(|| format!("Role '{name}' not found in SAML response"))?
+        roles.iter().find(|r| r.name == name).with_context(|| {
+            format!(
+                "Role '{name}' not found. Available roles: {}",
+                roles
+                    .iter()
+                    .map(|r| &r.name)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?
     } else if roles.len() == 1 {
         &roles[0]
     } else {
@@ -109,40 +157,6 @@ pub fn extract_role_from_response(
         role_arn: selected.role_arn.clone(),
         principal_arn: selected.principal_arn.clone(),
     })
-}
-
-#[derive(Debug, Clone)]
-struct Role {
-    name: String,
-    role_arn: String,
-    principal_arn: String,
-}
-
-impl Role {
-    fn from_arn_pair(arn_pair: &str) -> Option<Self> {
-        let parts: Vec<&str> = arn_pair.split(',').collect();
-        if parts.len() != 2 {
-            return None;
-        }
-
-        let (role_arn, principal_arn) = if parts[0].contains(":role/") {
-            (parts[0].to_string(), parts[1].to_string())
-        } else {
-            (parts[1].to_string(), parts[0].to_string())
-        };
-
-        // Extract role name from ARN (arn:aws:iam::123456789012:role/RoleName)
-        let name = role_arn
-            .split('/')
-            .next_back()
-            .map_or_else(|| "UnknownRole".to_string(), String::from);
-
-        Some(Role {
-            name,
-            role_arn,
-            principal_arn,
-        })
-    }
 }
 
 fn parse_roles_from_saml(xml_data: &[u8], role_attribute_name: &str) -> Result<Vec<Role>> {

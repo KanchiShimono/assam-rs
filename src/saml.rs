@@ -49,6 +49,98 @@ pub struct Role {
     pub principal_arn: String,
 }
 
+/// Parsed roles from SAML response, distinguishing between single and multiple roles
+#[derive(Debug, Clone)]
+pub enum ParsedRoles {
+    /// A single role is available (no selection required)
+    Single(Role),
+    /// Multiple roles are available (selection is required)
+    Multiple(Vec<Role>),
+}
+
+impl ParsedRoles {
+    /// Select a role based on optional role name
+    /// - If Single and no name specified: returns the single role
+    /// - If Single and name specified: validates the name matches
+    /// - If Multiple and name specified: finds matching role
+    /// - If Multiple and no name specified: returns error requiring selection
+    pub fn select(self, role_name: Option<&str>) -> Result<SelectedRole> {
+        match self {
+            ParsedRoles::Single(role) => {
+                // If a role name is specified, validate it matches
+                if let Some(name) = role_name {
+                    if role.name != name {
+                        bail!(
+                            "Specified role '{}' does not match the only available role '{}'",
+                            name,
+                            role.name
+                        );
+                    }
+                }
+                Ok(SelectedRole {
+                    role_arn: role.role_arn,
+                    principal_arn: role.principal_arn,
+                })
+            }
+            ParsedRoles::Multiple(roles) => {
+                match role_name {
+                    Some(name) => {
+                        // First collect available role names for error message
+                        let available = roles
+                            .iter()
+                            .map(|r| r.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        roles
+                            .into_iter()
+                            .find(|r| r.name == name)
+                            .map(|r| SelectedRole {
+                                role_arn: r.role_arn,
+                                principal_arn: r.principal_arn,
+                            })
+                            .with_context(|| {
+                                format!("Role '{name}' not found. Available roles: {available}")
+                            })
+                    }
+                    None => {
+                        let available = roles
+                            .iter()
+                            .map(|r| r.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        bail!(
+                            "Multiple roles available. Please specify one with --role flag: {}",
+                            available
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get all roles as a slice
+    pub fn as_slice(&self) -> &[Role] {
+        match self {
+            ParsedRoles::Single(role) => std::slice::from_ref(role),
+            ParsedRoles::Multiple(roles) => roles.as_slice(),
+        }
+    }
+
+    /// Get all roles as an iterator
+    pub fn iter(&self) -> std::slice::Iter<'_, Role> {
+        self.as_slice().iter()
+    }
+
+    /// Get all role names
+    pub fn role_names(&self) -> Vec<&str> {
+        match self {
+            ParsedRoles::Single(role) => vec![role.name.as_str()],
+            ParsedRoles::Multiple(roles) => roles.iter().map(|r| r.name.as_str()).collect(),
+        }
+    }
+}
+
 impl Role {
     fn from_arn_pair(arn_pair: &str) -> Option<Self> {
         let parts: Vec<&str> = arn_pair.split(',').collect();
@@ -112,51 +204,18 @@ fn encode_saml_request(xml: &str) -> Result<String> {
 pub fn parse_roles(
     base64_response: &str,
     provider_config: &SamlProviderConfig,
-) -> Result<Vec<Role>> {
+) -> Result<ParsedRoles> {
     let decoded = general_purpose::STANDARD
         .decode(base64_response)
         .context("Failed to decode SAML response from base64")?;
 
     let roles = parse_roles_from_saml(&decoded, &provider_config.role_attribute_name)?;
 
-    if roles.is_empty() {
-        bail!("No roles found in SAML response");
+    match roles.len() {
+        0 => bail!("No roles found in SAML response"),
+        1 => Ok(ParsedRoles::Single(roles.into_iter().next().unwrap())),
+        _ => Ok(ParsedRoles::Multiple(roles)),
     }
-
-    Ok(roles)
-}
-
-/// Select a specific role from available roles
-pub fn select_role(roles: &[Role], role_name: Option<&str>) -> Result<SelectedRole> {
-    let selected = if let Some(name) = role_name {
-        roles.iter().find(|r| r.name == name).with_context(|| {
-            format!(
-                "Role '{name}' not found. Available roles: {}",
-                roles
-                    .iter()
-                    .map(|r| &r.name)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?
-    } else if roles.len() == 1 {
-        &roles[0]
-    } else {
-        bail!(
-            "Multiple roles available. Please specify one with --role flag: {}",
-            roles
-                .iter()
-                .map(|r| r.name.clone())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-    };
-
-    Ok(SelectedRole {
-        role_arn: selected.role_arn.clone(),
-        principal_arn: selected.principal_arn.clone(),
-    })
 }
 
 fn parse_roles_from_saml(xml_data: &[u8], role_attribute_name: &str) -> Result<Vec<Role>> {
@@ -264,5 +323,75 @@ mod tests {
             role.principal_arn,
             "arn:aws:iam::123456789012:saml-provider/MyProvider"
         );
+    }
+
+    #[test]
+    fn test_parsed_roles_single() {
+        let role = Role {
+            name: "TestRole".to_string(),
+            role_arn: "arn:aws:iam::123456789012:role/TestRole".to_string(),
+            principal_arn: "arn:aws:iam::123456789012:saml-provider/TestProvider".to_string(),
+        };
+        let parsed = ParsedRoles::Single(role.clone());
+
+        // Test selection without role name
+        let selected = parsed.clone().select(None).unwrap();
+        assert_eq!(selected.role_arn, role.role_arn);
+        assert_eq!(selected.principal_arn, role.principal_arn);
+
+        // Test selection with matching role name
+        let selected = parsed.clone().select(Some("TestRole")).unwrap();
+        assert_eq!(selected.role_arn, role.role_arn);
+
+        // Test selection with non-matching role name
+        let result = parsed.clone().select(Some("WrongRole"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not match"));
+
+        // Test utility methods
+        assert_eq!(parsed.role_names(), vec!["TestRole"]);
+    }
+
+    #[test]
+    fn test_parsed_roles_multiple() {
+        let roles = vec![
+            Role {
+                name: "Role1".to_string(),
+                role_arn: "arn:aws:iam::123456789012:role/Role1".to_string(),
+                principal_arn: "arn:aws:iam::123456789012:saml-provider/Provider".to_string(),
+            },
+            Role {
+                name: "Role2".to_string(),
+                role_arn: "arn:aws:iam::123456789012:role/Role2".to_string(),
+                principal_arn: "arn:aws:iam::123456789012:saml-provider/Provider".to_string(),
+            },
+        ];
+        let parsed = ParsedRoles::Multiple(roles.clone());
+
+        // Test selection without role name (should fail)
+        let result = parsed.clone().select(None);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Multiple roles available")
+        );
+
+        // Test selection with valid role name
+        let selected = parsed.clone().select(Some("Role1")).unwrap();
+        assert_eq!(selected.role_arn, roles[0].role_arn);
+
+        // Test selection with invalid role name
+        let result = parsed.clone().select(Some("Role3"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+
+        // Test utility methods
+        assert_eq!(parsed.role_names(), vec!["Role1", "Role2"]);
+
+        // Test iterator
+        let role_names: Vec<&str> = parsed.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(role_names, vec!["Role1", "Role2"]);
     }
 }

@@ -3,8 +3,7 @@ use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sts::Client as StsClient;
 use tracing;
 
-use super::Credentials;
-use crate::constants::DEFAULT_AWS_REGION;
+use super::{Credentials, DEFAULT_AWS_REGION};
 
 /// Assume role using SAML assertion
 pub async fn assume_role_with_saml(

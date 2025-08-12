@@ -1,16 +1,28 @@
 use anyhow::{Context, Result};
 use aws_smithy_types::date_time::Format;
+use dirs;
 use ini::Ini;
+use std::{env, path::PathBuf};
 use tokio::fs;
 use tracing;
 
 use super::Credentials;
-use crate::constants;
+
+/// Get the AWS credentials file path
+/// Respects AWS_SHARED_CREDENTIALS_FILE environment variable if set
+fn get_aws_credentials_path() -> Option<PathBuf> {
+    // Check environment variable first
+    if let Ok(path) = env::var("AWS_SHARED_CREDENTIALS_FILE") {
+        return Some(PathBuf::from(path));
+    }
+
+    // Use default AWS credentials location
+    dirs::home_dir().map(|home| home.join(".aws").join("credentials"))
+}
 
 /// Save credentials to AWS credentials file
 pub async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> {
-    let path = constants::get_aws_credentials_path()
-        .context("Failed to determine AWS credentials path")?;
+    let path = get_aws_credentials_path().context("Failed to determine AWS credentials path")?;
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -53,8 +65,7 @@ pub async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> 
 
 /// Load credentials from AWS credentials file
 pub async fn load_credentials(profile: &str) -> Result<Credentials> {
-    let path = constants::get_aws_credentials_path()
-        .context("Failed to determine AWS credentials path")?;
+    let path = get_aws_credentials_path().context("Failed to determine AWS credentials path")?;
 
     let ini = match path.exists() {
         true => Ini::load_from_file(&path).context("Failed to read AWS credentials file")?,
@@ -99,4 +110,52 @@ pub async fn load_credentials(profile: &str) -> Result<Credentials> {
         session_token,
         expiration,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_get_aws_credentials_path_with_env() {
+        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+
+        unsafe {
+            env::set_var("AWS_SHARED_CREDENTIALS_FILE", "/custom/path/credentials");
+        }
+        let path = get_aws_credentials_path();
+        assert_eq!(path, Some(PathBuf::from("/custom/path/credentials")));
+
+        unsafe {
+            match original {
+                Some(val) => env::set_var("AWS_SHARED_CREDENTIALS_FILE", val),
+                None => env::remove_var("AWS_SHARED_CREDENTIALS_FILE"),
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_aws_credentials_path_default() {
+        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+
+        unsafe {
+            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+        }
+        let path = get_aws_credentials_path();
+
+        if let Some(p) = path {
+            let path_str = p.to_string_lossy();
+            assert!(path_str.contains(".aws"));
+            assert!(path_str.contains("credentials"));
+        }
+
+        unsafe {
+            if let Some(val) = original {
+                env::set_var("AWS_SHARED_CREDENTIALS_FILE", val);
+            }
+        }
+    }
 }

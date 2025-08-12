@@ -7,10 +7,12 @@ use crate::{
     aws::{self, AvailableRoles},
     browser::{BrowserAutomation, ChromeBrowser},
     config,
-    constants::AWS_SAML_ENDPOINT,
     idp::{IdentityProvider, azure::AzureProvider},
     saml::{SamlRequest, SamlResponse},
 };
+
+/// AWS SAML endpoint URL (where SAML response is posted)
+const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
 #[derive(Debug, Clone, Args)]
 pub struct AuthCommand {

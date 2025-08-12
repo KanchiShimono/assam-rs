@@ -7,8 +7,7 @@ use std::{process::Command, time::Duration};
 use tracing;
 use url::Url;
 
-use super::{Credentials, credentials};
-use crate::constants::DEFAULT_AWS_REGION;
+use super::{Credentials, DEFAULT_AWS_REGION, credentials};
 
 // AWS Federation API types (internal use only)
 // These types match the exact JSON format expected by AWS federation endpoint

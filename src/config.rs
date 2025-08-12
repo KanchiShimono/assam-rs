@@ -1,12 +1,60 @@
-use crate::constants::{
-    self, DEFAULT_APP_ID_URI, DEFAULT_SESSION_DURATION_HOURS, MAX_SESSION_DURATION_HOURS,
-    MIN_SESSION_DURATION_HOURS,
-};
 use anyhow::{Context, Result};
 use dialoguer::{Input, theme::ColorfulTheme};
+use dirs;
 use ini::{Ini, Properties};
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 use tokio::fs;
+
+// Configuration constants
+const DEFAULT_APP_ID_URI: &str = "https://signin.aws.amazon.com/saml";
+const MIN_SESSION_DURATION_HOURS: u8 = 1;
+const MAX_SESSION_DURATION_HOURS: u8 = 12;
+const DEFAULT_SESSION_DURATION_HOURS: u8 = 1;
+
+// Default configuration directory name under user's config directory
+const CONFIG_DIR_NAME: &str = "assam";
+
+// Chrome user data directory name
+const CHROME_USER_DATA_DIR_NAME: &str = "chrome-user-data";
+
+// AWS configuration directory name
+const AWS_CONFIG_DIR_NAME: &str = ".aws";
+
+// AWS configuration file name
+const AWS_CONFIG_FILE_NAME: &str = "config";
+
+/// Get the default Chrome user data directory path
+/// Always returns: ~/.config/assam/chrome-user-data (on all platforms)
+fn default_chrome_user_data_dir() -> PathBuf {
+    // Always use home directory with .config, regardless of platform
+    // This ensures consistent behavior across all OSes
+    let home_dir = dirs::home_dir()
+        .or_else(|| {
+            // Fallback to environment variables if dirs crate fails
+            env::var("HOME")
+                .or_else(|_| env::var("USERPROFILE"))
+                .ok()
+                .map(PathBuf::from)
+        })
+        .expect("Could not determine home directory. Please set HOME environment variable.");
+
+    home_dir
+        .join(".config")
+        .join(CONFIG_DIR_NAME)
+        .join(CHROME_USER_DATA_DIR_NAME)
+}
+
+/// Get the AWS config file path
+/// Respects AWS_CONFIG_FILE environment variable if set
+fn get_aws_config_path() -> Option<PathBuf> {
+    // Check environment variable first
+    if let Ok(path) = env::var("AWS_CONFIG_FILE") {
+        return Some(PathBuf::from(path));
+    }
+
+    // Use default AWS config location
+    dirs::home_dir().map(|home| home.join(AWS_CONFIG_DIR_NAME).join(AWS_CONFIG_FILE_NAME))
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -30,7 +78,7 @@ impl Config {
                 .unwrap_or(DEFAULT_SESSION_DURATION_HOURS),
             chrome_user_data_dir: section
                 .get("chrome_user_data_dir")
-                .map_or_else(constants::default_chrome_user_data_dir, PathBuf::from),
+                .map_or_else(default_chrome_user_data_dir, PathBuf::from),
         }
     }
 
@@ -112,7 +160,7 @@ pub async fn configure_interactive(profile: &str) -> Result<()> {
         app_id_uri: DEFAULT_APP_ID_URI.to_string(),
         azure_tenant_id: String::new(),
         default_session_duration_hours: DEFAULT_SESSION_DURATION_HOURS,
-        chrome_user_data_dir: constants::default_chrome_user_data_dir(),
+        chrome_user_data_dir: default_chrome_user_data_dir(),
     });
 
     let azure_tenant_id = Input::<String>::with_theme(&theme)
@@ -175,7 +223,7 @@ pub async fn configure_interactive(profile: &str) -> Result<()> {
 }
 
 fn get_config_path() -> Result<PathBuf> {
-    constants::get_aws_config_path().context("Failed to determine AWS config path")
+    get_aws_config_path().context("Failed to determine AWS config path")
 }
 
 fn is_valid_uuid(s: &str) -> bool {
@@ -221,9 +269,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_default_chrome_user_data_dir() {
-        let dir = constants::default_chrome_user_data_dir();
-        assert!(dir.to_string_lossy().contains("assam"));
-        assert!(dir.to_string_lossy().contains("chrome-user-data"));
+        let dir = default_chrome_user_data_dir();
+        assert!(dir.to_string_lossy().contains(CONFIG_DIR_NAME));
+        assert!(dir.to_string_lossy().contains(CHROME_USER_DATA_DIR_NAME));
     }
 
     #[test]
@@ -275,5 +323,47 @@ mod tests {
                 .to_string_lossy()
                 .contains("chrome-user-data")
         );
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_aws_config_path_with_env() {
+        let original = env::var("AWS_CONFIG_FILE").ok();
+
+        unsafe {
+            env::set_var("AWS_CONFIG_FILE", "/custom/aws/config");
+        }
+        let path = get_aws_config_path();
+        assert_eq!(path, Some(PathBuf::from("/custom/aws/config")));
+
+        unsafe {
+            match original {
+                Some(val) => env::set_var("AWS_CONFIG_FILE", val),
+                None => env::remove_var("AWS_CONFIG_FILE"),
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_aws_config_path_default() {
+        let original = env::var("AWS_CONFIG_FILE").ok();
+
+        unsafe {
+            env::remove_var("AWS_CONFIG_FILE");
+        }
+        let path = get_aws_config_path();
+
+        if let Some(p) = path {
+            let path_str = p.to_string_lossy();
+            assert!(path_str.contains(AWS_CONFIG_DIR_NAME));
+            assert!(path_str.contains(AWS_CONFIG_FILE_NAME));
+        }
+
+        unsafe {
+            if let Some(val) = original {
+                env::set_var("AWS_CONFIG_FILE", val);
+            }
+        }
     }
 }

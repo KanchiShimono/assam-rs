@@ -1,8 +1,9 @@
 use std::process::ExitCode;
 
+use anyhow::Result;
 use assam::cli::Cli;
 use clap::Parser;
-use tracing::{Level, subscriber};
+use tracing::Level;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[tokio::main]
@@ -23,7 +24,7 @@ async fn main() -> ExitCode {
     }
 }
 
-fn init_logging(verbose: u8) -> anyhow::Result<()> {
+fn init_logging(verbose: u8) -> Result<()> {
     let level = match verbose {
         0 => Level::WARN,
         1 => Level::INFO,
@@ -44,7 +45,7 @@ fn init_logging(verbose: u8) -> anyhow::Result<()> {
         .compact()
         .finish();
 
-    subscriber::set_global_default(subscriber)?;
+    tracing::subscriber::set_global_default(subscriber)?;
 
     Ok(())
 }

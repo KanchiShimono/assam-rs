@@ -1,5 +1,6 @@
-use dirs;
 use std::{env, path::PathBuf};
+
+use dirs;
 
 /// Default configuration directory name under user's config directory
 pub const CONFIG_DIR_NAME: &str = "assam";

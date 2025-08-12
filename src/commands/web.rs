@@ -8,6 +8,6 @@ pub struct WebCommand {}
 
 impl WebCommand {
     pub async fn execute(self, profile: &str) -> Result<()> {
-        aws::open_console(profile).await
+        aws::console::open_console(profile).await
     }
 }

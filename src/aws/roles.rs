@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::slice::Iter;
 
 use crate::saml::SamlResponse;
@@ -33,7 +33,7 @@ impl AvailableRoles {
             .collect();
 
         match roles.len() {
-            0 => anyhow::bail!("No roles found in SAML response"),
+            0 => bail!("No roles found in SAML response"),
             1 => Ok(AvailableRoles::Single(roles.into_iter().next().unwrap())),
             _ => Ok(AvailableRoles::Multiple(roles)),
         }
@@ -46,7 +46,7 @@ impl AvailableRoles {
                 // If a role name is specified, validate it matches
                 if let Some(name) = role_name {
                     if role.name != name {
-                        anyhow::bail!(
+                        bail!(
                             "Specified role '{}' does not match the only available role '{}'",
                             name,
                             role.name
@@ -75,7 +75,7 @@ impl AvailableRoles {
                             .map(|r| r.name.as_str())
                             .collect::<Vec<_>>()
                             .join(", ");
-                        anyhow::bail!(
+                        bail!(
                             "Multiple roles available. Please specify one with --role flag: {}",
                             available
                         );

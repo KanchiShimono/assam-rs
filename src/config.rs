@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use dialoguer::{Input, theme::ColorfulTheme};
-use dirs;
 use ini::{Ini, Properties};
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
 
 // Configuration constants
@@ -31,8 +30,8 @@ fn default_chrome_user_data_dir() -> PathBuf {
     let home_dir = dirs::home_dir()
         .or_else(|| {
             // Fallback to environment variables if dirs crate fails
-            env::var("HOME")
-                .or_else(|_| env::var("USERPROFILE"))
+            std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
                 .ok()
                 .map(PathBuf::from)
         })
@@ -48,7 +47,7 @@ fn default_chrome_user_data_dir() -> PathBuf {
 /// Respects AWS_CONFIG_FILE environment variable if set
 fn get_aws_config_path() -> Option<PathBuf> {
     // Check environment variable first
-    if let Ok(path) = env::var("AWS_CONFIG_FILE") {
+    if let Ok(path) = std::env::var("AWS_CONFIG_FILE") {
         return Some(PathBuf::from(path));
     }
 
@@ -328,18 +327,18 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_aws_config_path_with_env() {
-        let original = env::var("AWS_CONFIG_FILE").ok();
+        let original = std::env::var("AWS_CONFIG_FILE").ok();
 
         unsafe {
-            env::set_var("AWS_CONFIG_FILE", "/custom/aws/config");
+            std::env::set_var("AWS_CONFIG_FILE", "/custom/aws/config");
         }
         let path = get_aws_config_path();
         assert_eq!(path, Some(PathBuf::from("/custom/aws/config")));
 
         unsafe {
             match original {
-                Some(val) => env::set_var("AWS_CONFIG_FILE", val),
-                None => env::remove_var("AWS_CONFIG_FILE"),
+                Some(val) => std::env::set_var("AWS_CONFIG_FILE", val),
+                None => std::env::remove_var("AWS_CONFIG_FILE"),
             }
         }
     }
@@ -347,10 +346,10 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_aws_config_path_default() {
-        let original = env::var("AWS_CONFIG_FILE").ok();
+        let original = std::env::var("AWS_CONFIG_FILE").ok();
 
         unsafe {
-            env::remove_var("AWS_CONFIG_FILE");
+            std::env::remove_var("AWS_CONFIG_FILE");
         }
         let path = get_aws_config_path();
 
@@ -362,7 +361,7 @@ mod tests {
 
         unsafe {
             if let Some(val) = original {
-                env::set_var("AWS_CONFIG_FILE", val);
+                std::env::set_var("AWS_CONFIG_FILE", val);
             }
         }
     }

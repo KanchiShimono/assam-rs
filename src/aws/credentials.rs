@@ -1,10 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use aws_smithy_types::date_time::Format;
-use dirs;
 use ini::Ini;
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
-use tracing;
+use tracing::info;
 
 use super::Credentials;
 
@@ -12,7 +11,7 @@ use super::Credentials;
 /// Respects AWS_SHARED_CREDENTIALS_FILE environment variable if set
 fn get_aws_credentials_path() -> Option<PathBuf> {
     // Check environment variable first
-    if let Ok(path) = env::var("AWS_SHARED_CREDENTIALS_FILE") {
+    if let Ok(path) = std::env::var("AWS_SHARED_CREDENTIALS_FILE") {
         return Some(PathBuf::from(path));
     }
 
@@ -59,7 +58,7 @@ pub async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> 
         fs::set_permissions(&path, permissions).await?;
     }
 
-    tracing::info!("Credentials saved to profile: {}", profile);
+    info!("Credentials saved to profile: {}", profile);
     Ok(())
 }
 
@@ -70,7 +69,7 @@ pub async fn load_credentials(profile: &str) -> Result<Credentials> {
     let ini = match path.exists() {
         true => Ini::load_from_file(&path).context("Failed to read AWS credentials file")?,
         false => {
-            anyhow::bail!("AWS credentials file not found. Please authenticate with `assam` first")
+            bail!("AWS credentials file not found. Please authenticate with `assam` first")
         }
     };
 
@@ -120,18 +119,18 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_aws_credentials_path_with_env() {
-        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+        let original = std::env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
 
         unsafe {
-            env::set_var("AWS_SHARED_CREDENTIALS_FILE", "/custom/path/credentials");
+            std::env::set_var("AWS_SHARED_CREDENTIALS_FILE", "/custom/path/credentials");
         }
         let path = get_aws_credentials_path();
         assert_eq!(path, Some(PathBuf::from("/custom/path/credentials")));
 
         unsafe {
             match original {
-                Some(val) => env::set_var("AWS_SHARED_CREDENTIALS_FILE", val),
-                None => env::remove_var("AWS_SHARED_CREDENTIALS_FILE"),
+                Some(val) => std::env::set_var("AWS_SHARED_CREDENTIALS_FILE", val),
+                None => std::env::remove_var("AWS_SHARED_CREDENTIALS_FILE"),
             }
         }
     }
@@ -139,10 +138,10 @@ mod tests {
     #[test]
     #[serial]
     fn test_get_aws_credentials_path_default() {
-        let original = env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
+        let original = std::env::var("AWS_SHARED_CREDENTIALS_FILE").ok();
 
         unsafe {
-            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+            std::env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
         }
         let path = get_aws_credentials_path();
 
@@ -154,7 +153,7 @@ mod tests {
 
         unsafe {
             if let Some(val) = original {
-                env::set_var("AWS_SHARED_CREDENTIALS_FILE", val);
+                std::env::set_var("AWS_SHARED_CREDENTIALS_FILE", val);
             }
         }
     }

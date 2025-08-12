@@ -1,5 +1,3 @@
-use urlencoding;
-
 /// Azure Entra ID (formerly Azure AD) provider implementation
 #[derive(Debug, Clone)]
 pub struct AzureProvider {

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use aws_smithy_types::date_time::Format;
 use clap::Args;
-use tracing;
+use tracing::info;
 
 use crate::{
     aws::{self, AvailableRoles},
@@ -22,7 +22,7 @@ pub struct AuthCommand {
 
 impl AuthCommand {
     pub async fn execute(self, profile: &str) -> Result<()> {
-        tracing::info!("Starting authentication for profile: {}", profile);
+        info!("Starting authentication for profile: {}", profile);
 
         // Load configuration
         let config = config::load(profile)
@@ -44,7 +44,7 @@ impl AuthCommand {
         // Build authentication URL
         let auth_url = idp.build_auth_url(&encoded_request);
 
-        tracing::info!("Opening browser for authentication...");
+        info!("Opening browser for authentication...");
         println!("Please complete authentication in the browser window.");
 
         // Authenticate via browser using the new abstraction
@@ -67,7 +67,7 @@ impl AuthCommand {
             .assume(self.role.as_deref())
             .context("Failed to select role")?;
 
-        tracing::info!(
+        info!(
             "Requesting AWS credentials for role: {}",
             selected_role.role_arn
         );

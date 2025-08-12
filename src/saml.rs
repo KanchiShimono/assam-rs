@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{SecondsFormat, Utc};
 use flate2::{Compression, write::DeflateEncoder};
@@ -85,14 +85,14 @@ impl SamlResponse {
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => anyhow::bail!("Error parsing SAML response: {}", e),
+                Err(e) => bail!("Error parsing SAML response: {}", e),
                 _ => {}
             }
             buf.clear();
         }
 
         if values.is_empty() {
-            anyhow::bail!("No values found for attribute: {}", attribute_name);
+            bail!("No values found for attribute: {}", attribute_name);
         }
 
         Ok(values)

@@ -1,10 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use aws_config::BehaviorVersion;
-use reqwest;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::{process::Command, time::Duration};
-use tracing;
+use tracing::info;
 use url::Url;
 
 use super::{Credentials, DEFAULT_AWS_REGION, credentials};
@@ -48,7 +47,7 @@ pub async fn open_console(profile: &str) -> Result<()> {
     let url = generate_console_url(&creds, region).await?;
     open_browser(&url)?;
 
-    tracing::info!("Opened AWS Management Console in browser");
+    info!("Opened AWS Management Console in browser");
     Ok(())
 }
 
@@ -88,9 +87,7 @@ async fn get_signin_token(creds: &Credentials, amazon_domain: &str) -> Result<St
         .append_pair("DurationSeconds", "900") // Minimum value
         .append_pair("Session", &session_json);
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
 
     let response = client
         .get(url.as_str())
@@ -99,7 +96,7 @@ async fn get_signin_token(creds: &Credentials, amazon_domain: &str) -> Result<St
         .context("Failed to get signin token")?;
 
     if !response.status().is_success() {
-        anyhow::bail!("Failed to get signin token: {}", response.status());
+        bail!("Failed to get signin token: {}", response.status());
     }
 
     let token_response: SigninTokenResponse = response
@@ -131,7 +128,7 @@ fn open_browser(url: &str) -> Result<()> {
     let status = Command::new("xdg-open").arg(url).status();
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    return anyhow::bail!("Unsupported operating system");
+    return bail!("Unsupported operating system");
 
     status
         .context("Failed to execute browser command")

@@ -1,17 +1,15 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chromiumoxide::cdp::browser_protocol::network::{EnableParams, EventRequestWillBeSent};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
 use std::{
-    fs,
     path::{Path, PathBuf},
-    str,
     sync::Arc,
     time::Duration,
 };
 use tokio::{sync, time};
-use tracing;
+use tracing::info;
 use url::form_urlencoded;
 
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
@@ -63,7 +61,7 @@ impl BrowserAutomation for ChromeBrowser {
     where
         F: Fn(&str) -> bool + Send + Sync + 'static,
     {
-        tracing::info!("Starting browser authentication flow");
+        info!("Starting browser authentication flow");
 
         let mut browser = launch_browser(&self.user_data_dir).await?;
 
@@ -82,7 +80,7 @@ impl BrowserAutomation for ChromeBrowser {
 }
 
 async fn launch_browser(user_data_dir: &Path) -> Result<Browser> {
-    fs::create_dir_all(user_data_dir)?;
+    std::fs::create_dir_all(user_data_dir)?;
 
     let config = BrowserConfig::builder()
         .user_data_dir(user_data_dir)
@@ -140,13 +138,13 @@ where
     });
 
     // Navigate to login page
-    tracing::info!("Navigating to authentication page");
+    info!("Navigating to authentication page");
     page.goto(&auth_url).await?;
-    tracing::info!("Browser opened. Please complete authentication in the browser window.");
+    info!("Browser opened. Please complete authentication in the browser window.");
 
     // Wait for SAML response
     rx.await
-        .map_err(|_| anyhow::anyhow!("SAML response channel closed"))
+        .map_err(|_| anyhow!("SAML response channel closed"))
 }
 
 /// Extract SAML response from a network request
@@ -164,7 +162,7 @@ fn extract_saml_from_request(event: &Arc<EventRequestWillBeSent>) -> Option<Stri
             let data = entries
                 .iter()
                 .filter_map(|e| e.bytes.as_ref())
-                .filter_map(|b| str::from_utf8(b.as_ref()).ok())
+                .filter_map(|b| std::str::from_utf8(b.as_ref()).ok())
                 .collect::<String>();
 
             // SAMLレスポンスは、サーバー実装によって異なる形式で送信される場合がある：

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sts::Client as StsClient;
-use tracing;
+use tracing::{debug, info};
 
 use super::{Credentials, DEFAULT_AWS_REGION};
 
@@ -13,11 +13,11 @@ pub async fn assume_role_with_saml(
     principal_arn: &str,
     duration_seconds: i32,
 ) -> Result<Credentials> {
-    tracing::info!("Calling AWS STS AssumeRoleWithSAML");
-    tracing::debug!("Profile: {}", profile);
-    tracing::debug!("Role ARN: {}", role_arn);
-    tracing::debug!("Principal ARN: {}", principal_arn);
-    tracing::debug!("Duration: {} seconds", duration_seconds);
+    info!("Calling AWS STS AssumeRoleWithSAML");
+    debug!("Profile: {}", profile);
+    debug!("Role ARN: {}", role_arn);
+    debug!("Principal ARN: {}", principal_arn);
+    debug!("Duration: {} seconds", duration_seconds);
 
     // Load AWS config with automatic region fallback
     // Priority: ENV vars -> Config file -> EC2 metadata -> DEFAULT_AWS_REGION
@@ -29,11 +29,11 @@ pub async fn assume_role_with_saml(
 
         match loaded.region() {
             Some(region) => {
-                tracing::info!("Using region: {}", region);
+                info!("Using region: {}", region);
                 loaded
             }
             None => {
-                tracing::info!(
+                info!(
                     "No region configured, using default {} for STS",
                     DEFAULT_AWS_REGION
                 );
@@ -69,6 +69,6 @@ pub async fn assume_role_with_saml(
         expiration: *sts_creds.expiration(),
     };
 
-    tracing::info!("Successfully obtained AWS credentials");
+    info!("Successfully obtained AWS credentials");
     Ok(credentials)
 }

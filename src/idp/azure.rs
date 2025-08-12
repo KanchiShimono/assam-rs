@@ -20,11 +20,6 @@ impl AzureProvider {
             urlencoding::encode(saml_request)
         )
     }
-
-    /// Check if the URL is a SAML response endpoint
-    pub fn is_saml_endpoint(&self, url: &str) -> bool {
-        url.starts_with("https://login.microsoftonline.com/") && url.contains("/saml2")
-    }
 }
 
 #[cfg(test)]
@@ -40,18 +35,5 @@ mod tests {
         assert!(url.contains("login.microsoftonline.com"));
         assert!(url.contains("test-tenant-id"));
         assert!(url.contains("SAMLRequest=test-saml-request"));
-    }
-
-    #[test]
-    fn test_is_saml_endpoint() {
-        let provider = AzureProvider::new("test-tenant-id".to_string());
-
-        assert!(provider.is_saml_endpoint("https://login.microsoftonline.com/tenant/saml2"));
-        assert!(
-            provider
-                .is_saml_endpoint("https://login.microsoftonline.com/common/saml2?response=xxx")
-        );
-        assert!(!provider.is_saml_endpoint("https://example.com/saml"));
-        assert!(!provider.is_saml_endpoint("https://login.microsoftonline.com/oauth2"));
     }
 }

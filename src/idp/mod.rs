@@ -19,12 +19,4 @@ impl IdentityProvider {
             // Future: Self::Okta(provider) => provider.build_auth_url(saml_request),
         }
     }
-
-    /// Check if the URL is a SAML response endpoint
-    pub fn is_saml_endpoint(&self, url: &str) -> bool {
-        match self {
-            Self::Azure(provider) => provider.is_saml_endpoint(url),
-            // Future: Self::Okta(provider) => provider.is_saml_endpoint(url),
-        }
-    }
 }

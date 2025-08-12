@@ -20,9 +20,6 @@ pub const DEFAULT_APP_ID_URI: &str = "https://signin.aws.amazon.com/saml";
 /// AWS SAML endpoint URL (where SAML response is posted)
 pub const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
-/// AWS SAML attribute name for IAM roles in SAML assertions
-pub const AWS_SAML_ROLE_ATTRIBUTE: &str = "https://aws.amazon.com/SAML/Attributes/Role";
-
 /// Minimum session duration in hours
 pub const MIN_SESSION_DURATION_HOURS: u8 = 1;
 

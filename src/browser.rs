@@ -14,9 +14,6 @@ use tokio::{sync, time};
 use tracing;
 use url::form_urlencoded;
 
-use crate::constants::AWS_SAML_ENDPOINT;
-use crate::idp::{IdentityProvider, azure::AzureProvider};
-
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Browser automation trait for SAML authentication flows
@@ -178,21 +175,6 @@ fn extract_saml_from_request(event: &Arc<EventRequestWillBeSent>) -> Option<Stri
             // Base64デコード後に再度パースを試みる
             parse_saml_response(&data).or_else(|| try_decode_and_parse(&data))
         })
-}
-
-/// Legacy function for backward compatibility - will be removed after migration
-pub async fn authenticate(
-    saml_request: &str,
-    tenant_id: &str,
-    user_data_dir: &Path,
-) -> Result<String> {
-    let idp = IdentityProvider::Azure(AzureProvider::new(tenant_id.to_string()));
-    let auth_url = idp.build_auth_url(saml_request);
-
-    let chrome = ChromeBrowser::new(user_data_dir.to_path_buf());
-    chrome
-        .capture_saml_response(auth_url, |url| url == AWS_SAML_ENDPOINT)
-        .await
 }
 
 fn parse_saml_response(data: &str) -> Option<String> {

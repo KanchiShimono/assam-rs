@@ -3,7 +3,16 @@ use aws_smithy_types::date_time::Format;
 use clap::Args;
 use tracing::info;
 
-use crate::{aws, browser, config, saml};
+use crate::{
+    aws::{self, AvailableRoles},
+    browser::{BrowserAutomation, ChromeBrowser},
+    config,
+    idp::{IdentityProvider, azure::AzureProvider},
+    saml::{SamlRequest, SamlResponse},
+};
+
+/// AWS SAML endpoint URL (where SAML response is posted)
+const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
 #[derive(Debug, Clone, Args)]
 pub struct AuthCommand {
@@ -20,30 +29,42 @@ impl AuthCommand {
             .await
             .with_context(|| format!("Failed to load configuration for profile '{profile}'. Please run 'assam config' first."))?;
 
-        // Generate SAML request
-        let provider_config = saml::SamlProviderConfig::aws(config.app_id_uri.clone());
-        let saml_request =
-            saml::create_request(&provider_config).context("Failed to create SAML request")?;
+        // Create IdP instance (currently only Azure is supported)
+        let idp = IdentityProvider::Azure(AzureProvider::new(config.azure_tenant_id.clone()));
 
-        info!("Opening browser for Azure Entra ID authentication...");
+        // Generate SAML request
+        let saml_request = SamlRequest {
+            issuer: config.app_id_uri.clone(),
+            acs_url: AWS_SAML_ENDPOINT.to_string(),
+        };
+        let encoded_request = saml_request
+            .generate()
+            .context("Failed to create SAML request")?;
+
+        // Build authentication URL
+        let auth_url = idp.build_auth_url(&encoded_request);
+
+        info!("Opening browser for authentication...");
         println!("Please complete authentication in the browser window.");
 
-        // Authenticate via browser
-        let saml_response = browser::authenticate(
-            &saml_request,
-            &config.azure_tenant_id,
-            &config.chrome_user_data_dir,
-        )
-        .await
-        .context("Failed to complete browser authentication")?;
+        // Authenticate via browser using the new abstraction
+        let chrome = ChromeBrowser::new(config.chrome_user_data_dir.clone());
+        let saml_response_base64 = chrome
+            .capture_saml_response(auth_url, |url| url == AWS_SAML_ENDPOINT)
+            .await
+            .context("Failed to complete browser authentication")?;
 
-        // Parse available roles from SAML response
-        let parsed_roles = saml::parse_roles(&saml_response, &provider_config)
-            .context("Failed to parse roles from SAML response")?;
+        // Parse SAML response
+        let saml_response = SamlResponse::from_base64(&saml_response_base64)
+            .context("Failed to decode SAML response")?;
+
+        // Extract available roles from SAML response
+        let available_roles = AvailableRoles::from_saml_response(&saml_response)
+            .context("Failed to extract roles from SAML response")?;
 
         // Select the appropriate role
-        let selected_role = parsed_roles
-            .select(self.role.as_deref())
+        let selected_role = available_roles
+            .assume(self.role.as_deref())
             .context("Failed to select role")?;
 
         info!(
@@ -52,9 +73,9 @@ impl AuthCommand {
         );
 
         // Get AWS credentials
-        let credentials = aws::assume_role_with_saml(
+        let credentials = aws::sts::assume_role_with_saml(
             profile,
-            &saml_response,
+            &saml_response_base64,
             &selected_role.role_arn,
             &selected_role.principal_arn,
             i32::from(config.default_session_duration_hours) * 3600,
@@ -63,7 +84,7 @@ impl AuthCommand {
         .context("Failed to assume AWS role with SAML")?;
 
         // Save credentials
-        aws::save_credentials(profile, &credentials)
+        aws::credentials::save_credentials(profile, &credentials)
             .await
             .context("Failed to save AWS credentials")?;
 

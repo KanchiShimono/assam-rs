@@ -1,6 +1,5 @@
 use clap::{Args, CommandFactory};
 use clap_complete::Shell;
-use std::io;
 
 use crate::cli::Cli;
 
@@ -14,7 +13,7 @@ impl CompletionCommand {
     pub fn execute(self) {
         let mut cmd = Cli::command();
         let app_name = cmd.get_name().to_string();
-        clap_complete::generate(self.shell, &mut cmd, app_name, &mut io::stdout());
+        clap_complete::generate(self.shell, &mut cmd, app_name, &mut std::io::stdout());
     }
 
     #[cfg(test)]

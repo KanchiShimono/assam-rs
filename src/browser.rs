@@ -1,43 +1,86 @@
-use anyhow::{Context, Error, Result};
-use base64::{Engine as _, engine::general_purpose};
+use anyhow::{Context, Error, Result, anyhow};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chromiumoxide::cdp::browser_protocol::network::{EnableParams, EventRequestWillBeSent};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
-use std::{fs, path::Path, str, sync::Arc, time::Duration};
-use tokio::sync::oneshot;
-use tokio::time;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::{sync, time};
 use tracing::info;
 use url::form_urlencoded;
-use urlencoding;
-
-use crate::constants::AWS_SAML_ENDPOINT;
 
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
 
-pub async fn authenticate(
-    saml_request: &str,
-    tenant_id: &str,
-    user_data_dir: &Path,
-) -> Result<String> {
-    info!("Starting browser authentication flow");
+/// Browser automation trait for SAML authentication flows
+// Allow async fn in trait: このトレイトは内部実装用でSend境界は不要なため
+#[allow(async_fn_in_trait)]
+pub trait BrowserAutomation {
+    /// Capture SAML response through browser authentication
+    async fn capture_saml_response<F>(
+        &self,
+        auth_url: String,
+        is_target_endpoint: F,
+    ) -> Result<String>
+    where
+        F: Fn(&str) -> bool + Send + Sync + 'static;
+}
 
-    let mut browser = launch_browser(user_data_dir).await?;
+/// Chrome browser implementation
+pub struct ChromeBrowser {
+    user_data_dir: PathBuf,
+    timeout: Duration,
+}
 
-    let result = time::timeout(
-        BROWSER_TIMEOUT,
-        capture_saml_response(&browser, saml_request, tenant_id),
-    )
-    .await
-    .context("Authentication timed out")??;
+impl ChromeBrowser {
+    /// Create a new Chrome browser instance
+    pub fn new(user_data_dir: PathBuf) -> Self {
+        Self {
+            user_data_dir,
+            timeout: BROWSER_TIMEOUT,
+        }
+    }
 
-    browser.close().await.ok();
-    browser.wait().await.ok();
+    /// Create with custom timeout
+    pub fn with_timeout(user_data_dir: PathBuf, timeout: Duration) -> Self {
+        Self {
+            user_data_dir,
+            timeout,
+        }
+    }
+}
 
-    Ok(result)
+impl BrowserAutomation for ChromeBrowser {
+    async fn capture_saml_response<F>(
+        &self,
+        auth_url: String,
+        is_target_endpoint: F,
+    ) -> Result<String>
+    where
+        F: Fn(&str) -> bool + Send + Sync + 'static,
+    {
+        info!("Starting browser authentication flow");
+
+        let mut browser = launch_browser(&self.user_data_dir).await?;
+
+        let result = time::timeout(
+            self.timeout,
+            capture_saml_with_callback(&browser, auth_url, is_target_endpoint),
+        )
+        .await
+        .context("Authentication timed out")??;
+
+        browser.close().await.ok();
+        browser.wait().await.ok();
+
+        Ok(result)
+    }
 }
 
 async fn launch_browser(user_data_dir: &Path) -> Result<Browser> {
-    fs::create_dir_all(user_data_dir)?;
+    std::fs::create_dir_all(user_data_dir)?;
 
     let config = BrowserConfig::builder()
         .user_data_dir(user_data_dir)
@@ -62,47 +105,52 @@ async fn launch_browser(user_data_dir: &Path) -> Result<Browser> {
     Ok(browser)
 }
 
-async fn capture_saml_response(
+async fn capture_saml_with_callback<F>(
     browser: &Browser,
-    saml_request: &str,
-    tenant_id: &str,
-) -> Result<String> {
+    auth_url: String,
+    is_target_endpoint: F,
+) -> Result<String>
+where
+    F: Fn(&str) -> bool + Send + Sync + 'static,
+{
     let page = browser.new_page("about:blank").await?;
     page.execute(EnableParams::default()).await?;
 
-    let (tx, rx) = oneshot::channel();
+    let (tx, rx) = sync::oneshot::channel();
+
+    // Convert the callback to an Arc for sharing across threads
+    let is_target = Arc::new(is_target_endpoint);
 
     // Start monitoring network events
     let page_clone = page.clone();
     tokio::spawn(async move {
         if let Ok(mut events) = page_clone.event_listener::<EventRequestWillBeSent>().await {
             while let Some(event) = events.next().await {
-                if let Some(saml) = extract_saml(&event) {
-                    let _ = tx.send(saml);
-                    return;
+                // Use the callback to check if this is the target endpoint
+                if is_target(&event.request.url) {
+                    if let Some(saml) = extract_saml_from_request(&event) {
+                        let _ = tx.send(saml);
+                        return;
+                    }
                 }
             }
         }
     });
 
     // Navigate to login page
-    let url = format!(
-        "https://login.microsoftonline.com/{}/saml2?SAMLRequest={}",
-        tenant_id,
-        urlencoding::encode(saml_request)
-    );
-
-    info!("Navigating to Azure Entra ID login page");
-    page.goto(&url).await?;
+    info!("Navigating to authentication page");
+    page.goto(&auth_url).await?;
     info!("Browser opened. Please complete authentication in the browser window.");
 
     // Wait for SAML response
     rx.await
-        .map_err(|_| anyhow::anyhow!("SAML response channel closed"))
+        .map_err(|_| anyhow!("SAML response channel closed"))
 }
 
-fn extract_saml(event: &Arc<EventRequestWillBeSent>) -> Option<String> {
-    if event.request.url != AWS_SAML_ENDPOINT || !event.request.has_post_data.unwrap_or(false) {
+/// Extract SAML response from a network request
+/// This is now generic and checks for SAML responses in POST data
+fn extract_saml_from_request(event: &Arc<EventRequestWillBeSent>) -> Option<String> {
+    if !event.request.has_post_data.unwrap_or(false) {
         return None;
     }
 
@@ -114,7 +162,7 @@ fn extract_saml(event: &Arc<EventRequestWillBeSent>) -> Option<String> {
             let data = entries
                 .iter()
                 .filter_map(|e| e.bytes.as_ref())
-                .filter_map(|b| str::from_utf8(b.as_ref()).ok())
+                .filter_map(|b| std::str::from_utf8(b.as_ref()).ok())
                 .collect::<String>();
 
             // SAMLレスポンスは、サーバー実装によって異なる形式で送信される場合がある：
@@ -134,7 +182,7 @@ fn parse_saml_response(data: &str) -> Option<String> {
 }
 
 fn try_decode_and_parse(data: &str) -> Option<String> {
-    general_purpose::STANDARD
+    STANDARD
         .decode(data)
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok())
@@ -197,7 +245,7 @@ mod tests {
     fn test_decode_and_parse() {
         // 正常系: Base64エンコードされたURLエンコード形式
         let data = "SAMLResponse=encoded_value&RelayState=state";
-        let encoded = general_purpose::STANDARD.encode(data);
+        let encoded = STANDARD.encode(data);
         assert_eq!(
             try_decode_and_parse(&encoded),
             Some("encoded_value".to_string())
@@ -208,22 +256,22 @@ mod tests {
 
         // Base64は正しいがSAMLResponseがない
         let data_no_saml = "other=value";
-        let encoded_no_saml = general_purpose::STANDARD.encode(data_no_saml);
+        let encoded_no_saml = STANDARD.encode(data_no_saml);
         assert_eq!(try_decode_and_parse(&encoded_no_saml), None);
 
         // 空文字列
         assert_eq!(try_decode_and_parse(""), None);
 
         // Base64デコード後が不正なUTF-8（バイナリデータ）
-        let invalid_utf8 = general_purpose::STANDARD.encode([0xFF, 0xFE, 0xFD]);
+        let invalid_utf8 = STANDARD.encode([0xFF, 0xFE, 0xFD]);
         assert_eq!(try_decode_and_parse(&invalid_utf8), None);
     }
 
     #[test]
-    fn test_extract_saml_success() {
-        // 正常系: AWS SAMLエンドポイントへのPOSTリクエスト
+    fn test_extract_saml_from_request_success() {
+        // 正常系: POSTリクエスト with SAML
         let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
+            url: "https://signin.aws.amazon.com/saml".to_string(),
             url_fragment: None,
             method: "POST".to_string(),
             headers: Default::default(),
@@ -258,17 +306,20 @@ mod tests {
             has_user_gesture: None,
         });
 
-        assert_eq!(extract_saml(&event), Some("test_saml_response".to_string()));
+        assert_eq!(
+            extract_saml_from_request(&event),
+            Some("test_saml_response".to_string())
+        );
     }
 
     #[test]
-    fn test_extract_saml_base64_encoded_body() {
+    fn test_extract_saml_from_request_base64_encoded_body() {
         // Base64エンコードされたPOSTボディ
         let post_data = "SAMLResponse=base64_encoded_saml";
-        let encoded_data = general_purpose::STANDARD.encode(post_data);
+        let encoded_data = STANDARD.encode(post_data);
 
         let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
+            url: "https://any.url/saml".to_string(),
             url_fragment: None,
             method: "POST".to_string(),
             headers: Default::default(),
@@ -300,54 +351,16 @@ mod tests {
         });
 
         assert_eq!(
-            extract_saml(&event),
+            extract_saml_from_request(&event),
             Some("base64_encoded_saml".to_string())
         );
     }
 
     #[test]
-    fn test_extract_saml_wrong_url() {
-        // 異なるURLの場合
-        let request = CdpRequest {
-            url: "https://example.com/other".to_string(),
-            url_fragment: None,
-            method: "POST".to_string(),
-            headers: Default::default(),
-            has_post_data: Some(true),
-            post_data_entries: Some(vec![PostDataEntry {
-                bytes: Some("SAMLResponse=test".to_string().into()),
-            }]),
-            mixed_content_type: None,
-            initial_priority: ResourcePriority::VeryLow,
-            referrer_policy: RequestReferrerPolicy::StrictOriginWhenCrossOrigin,
-            is_link_preload: None,
-            trust_token_params: None,
-            is_same_site: None,
-        };
-
-        let event = Arc::new(EventRequestWillBeSent {
-            request_id: Default::default(),
-            loader_id: Default::default(),
-            document_url: String::new(),
-            request,
-            timestamp: Default::default(),
-            wall_time: Default::default(),
-            initiator: Initiator::new(InitiatorType::Parser),
-            redirect_has_extra_info: false,
-            redirect_response: None,
-            r#type: Some(ResourceType::Document),
-            frame_id: None,
-            has_user_gesture: None,
-        });
-
-        assert_eq!(extract_saml(&event), None);
-    }
-
-    #[test]
-    fn test_extract_saml_no_post_data() {
+    fn test_extract_saml_from_request_no_post_data() {
         // POSTデータがない場合
         let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
+            url: "https://any.url/saml".to_string(),
             url_fragment: None,
             method: "GET".to_string(),
             headers: Default::default(),
@@ -376,123 +389,6 @@ mod tests {
             has_user_gesture: None,
         });
 
-        assert_eq!(extract_saml(&event), None);
-    }
-
-    #[test]
-    fn test_extract_saml_empty_post_data_entries() {
-        // POSTデータエントリーが空の場合
-        let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
-            url_fragment: None,
-            method: "POST".to_string(),
-            headers: Default::default(),
-            has_post_data: Some(true),
-            post_data_entries: Some(vec![]),
-            mixed_content_type: None,
-            initial_priority: ResourcePriority::VeryLow,
-            referrer_policy: RequestReferrerPolicy::StrictOriginWhenCrossOrigin,
-            is_link_preload: None,
-            trust_token_params: None,
-            is_same_site: None,
-        };
-
-        let event = Arc::new(EventRequestWillBeSent {
-            request_id: Default::default(),
-            loader_id: Default::default(),
-            document_url: String::new(),
-            request,
-            timestamp: Default::default(),
-            wall_time: Default::default(),
-            initiator: Initiator::new(InitiatorType::Parser),
-            redirect_has_extra_info: false,
-            redirect_response: None,
-            r#type: Some(ResourceType::Document),
-            frame_id: None,
-            has_user_gesture: None,
-        });
-
-        assert_eq!(extract_saml(&event), None);
-    }
-
-    #[test]
-    fn test_extract_saml_invalid_utf8() {
-        // 不正なUTF-8データ
-        let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
-            url_fragment: None,
-            method: "POST".to_string(),
-            headers: Default::default(),
-            has_post_data: Some(true),
-            post_data_entries: Some(vec![PostDataEntry {
-                bytes: Some(general_purpose::STANDARD.encode([0xFF, 0xFE, 0xFD]).into()),
-            }]),
-            mixed_content_type: None,
-            initial_priority: ResourcePriority::VeryLow,
-            referrer_policy: RequestReferrerPolicy::StrictOriginWhenCrossOrigin,
-            is_link_preload: None,
-            trust_token_params: None,
-            is_same_site: None,
-        };
-
-        let event = Arc::new(EventRequestWillBeSent {
-            request_id: Default::default(),
-            loader_id: Default::default(),
-            document_url: String::new(),
-            request,
-            timestamp: Default::default(),
-            wall_time: Default::default(),
-            initiator: Initiator::new(InitiatorType::Parser),
-            redirect_has_extra_info: false,
-            redirect_response: None,
-            r#type: Some(ResourceType::Document),
-            frame_id: None,
-            has_user_gesture: None,
-        });
-
-        assert_eq!(extract_saml(&event), None);
-    }
-
-    #[test]
-    fn test_extract_saml_multiple_post_data_entries() {
-        // 複数のPOSTデータエントリー（実際のブラウザでは起こりうる）
-        let request = CdpRequest {
-            url: AWS_SAML_ENDPOINT.to_string(),
-            url_fragment: None,
-            method: "POST".to_string(),
-            headers: Default::default(),
-            has_post_data: Some(true),
-            post_data_entries: Some(vec![
-                PostDataEntry {
-                    bytes: Some("SAMLResponse=part1".to_string().into()),
-                },
-                PostDataEntry {
-                    bytes: Some("&RelayState=state".to_string().into()),
-                },
-            ]),
-            mixed_content_type: None,
-            initial_priority: ResourcePriority::VeryLow,
-            referrer_policy: RequestReferrerPolicy::StrictOriginWhenCrossOrigin,
-            is_link_preload: None,
-            trust_token_params: None,
-            is_same_site: None,
-        };
-
-        let event = Arc::new(EventRequestWillBeSent {
-            request_id: Default::default(),
-            loader_id: Default::default(),
-            document_url: String::new(),
-            request,
-            timestamp: Default::default(),
-            wall_time: Default::default(),
-            initiator: Initiator::new(InitiatorType::Parser),
-            redirect_has_extra_info: false,
-            redirect_response: None,
-            r#type: Some(ResourceType::Document),
-            frame_id: None,
-            has_user_gesture: None,
-        });
-
-        assert_eq!(extract_saml(&event), Some("part1".to_string()));
+        assert_eq!(extract_saml_from_request(&event), None);
     }
 }

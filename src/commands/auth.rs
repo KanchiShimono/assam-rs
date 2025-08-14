@@ -14,7 +14,7 @@ use crate::{
 /// AWS SAML endpoint URL (where SAML response is posted)
 const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Default, Clone, Args)]
 pub struct AuthCommand {
     #[arg(short = 'r', long, help = "AWS IAM role name to assume")]
     pub role: Option<String>,

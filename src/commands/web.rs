@@ -3,7 +3,7 @@ use clap::Args;
 
 use crate::aws;
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Default, Clone, Args)]
 pub struct WebCommand {}
 
 impl WebCommand {

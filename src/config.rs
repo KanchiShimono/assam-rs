@@ -63,6 +63,17 @@ pub struct Config {
     pub chrome_user_data_dir: PathBuf,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            app_id_uri: DEFAULT_APP_ID_URI.to_string(),
+            azure_tenant_id: String::new(),
+            default_session_duration_hours: DEFAULT_SESSION_DURATION_HOURS,
+            chrome_user_data_dir: default_chrome_user_data_dir(),
+        }
+    }
+}
+
 impl Config {
     fn from_ini_section(section: &Properties) -> Self {
         Self {
@@ -155,12 +166,7 @@ pub async fn configure_interactive(profile: &str) -> Result<()> {
 
     let theme = ColorfulTheme::default();
 
-    let default_config = existing_config.unwrap_or(Config {
-        app_id_uri: DEFAULT_APP_ID_URI.to_string(),
-        azure_tenant_id: String::new(),
-        default_session_duration_hours: DEFAULT_SESSION_DURATION_HOURS,
-        chrome_user_data_dir: default_chrome_user_data_dir(),
-    });
+    let default_config = existing_config.unwrap_or_default();
 
     let azure_tenant_id = Input::<String>::with_theme(&theme)
         .with_prompt("Azure Tenant ID")

@@ -3,7 +3,7 @@ use clap::Args;
 
 use crate::config;
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Default, Clone, Args)]
 pub struct ConfigCommand {}
 
 impl ConfigCommand {

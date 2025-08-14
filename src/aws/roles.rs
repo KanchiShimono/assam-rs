@@ -42,19 +42,16 @@ impl AvailableRoles {
     /// 利用するロールを決定
     pub fn assume(self, role_name: Option<&str>) -> Result<IamRole> {
         match self {
-            AvailableRoles::Single(role) => {
-                // If a role name is specified, validate it matches
-                if let Some(name) = role_name {
-                    if role.name != name {
-                        bail!(
-                            "Specified role '{}' does not match the only available role '{}'",
-                            name,
-                            role.name
-                        );
-                    }
-                }
-                Ok(role)
-            }
+            AvailableRoles::Single(role) => role_name
+                .filter(|&name| role.name != name)
+                .map(|name| {
+                    bail!(
+                        "Specified role '{}' does not match the only available role '{}'",
+                        name,
+                        role.name
+                    )
+                })
+                .unwrap_or(Ok(role)),
             AvailableRoles::Multiple(roles) => {
                 match role_name {
                     Some(name) => {

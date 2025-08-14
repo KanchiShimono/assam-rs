@@ -126,12 +126,11 @@ where
     tokio::spawn(async move {
         if let Ok(mut events) = page_clone.event_listener::<EventRequestWillBeSent>().await {
             while let Some(event) = events.next().await {
-                // Use the callback to check if this is the target endpoint
-                if is_target(&event.request.url) {
-                    if let Some(saml) = extract_saml_from_request(&event) {
-                        let _ = tx.send(saml);
-                        return;
-                    }
+                if is_target(&event.request.url)
+                    && let Some(saml) = extract_saml_from_request(&event)
+                {
+                    let _ = tx.send(saml);
+                    return;
                 }
             }
         }

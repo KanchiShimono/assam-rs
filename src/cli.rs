@@ -34,12 +34,16 @@ pub enum Commands {
     Completion(CompletionCommand),
 }
 
+impl Default for Commands {
+    fn default() -> Self {
+        Commands::Auth(AuthCommand::default())
+    }
+}
+
 impl Cli {
     pub async fn execute(self) -> Result<()> {
         let profile = self.profile;
-        let command = self
-            .command
-            .unwrap_or(Commands::Auth(AuthCommand { role: None }));
+        let command = self.command.unwrap_or_default();
 
         match command {
             Commands::Auth(cmd) => cmd.execute(&profile).await,
@@ -66,10 +70,7 @@ mod tests {
             command: None,
         };
 
-        match cli
-            .command
-            .unwrap_or(Commands::Auth(AuthCommand { role: None }))
-        {
+        match cli.command.unwrap_or_default() {
             Commands::Auth(cmd) => assert_eq!(cmd.role, None),
             _ => panic!("Expected Auth command as default"),
         }

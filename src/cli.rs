@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{ArgAction, Parser};
 
 use crate::commands::{AuthCommand, CompletionCommand, ConfigCommand, WebCommand};
 
@@ -19,11 +19,11 @@ pub struct Cli {
     pub verbose: u8,
 
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Option<Subcommand>,
 }
 
-#[derive(Debug, Clone, Subcommand)]
-pub enum Commands {
+#[derive(Debug, Clone, clap::Subcommand)]
+pub enum Subcommand {
     #[command(about = "Authenticate with AWS using SAML via Azure Entra ID")]
     Auth(AuthCommand),
     #[command(about = "Configure Azure Entra ID and AWS settings")]
@@ -34,9 +34,9 @@ pub enum Commands {
     Completion(CompletionCommand),
 }
 
-impl Default for Commands {
+impl Default for Subcommand {
     fn default() -> Self {
-        Commands::Auth(AuthCommand::default())
+        Subcommand::Auth(AuthCommand::default())
     }
 }
 
@@ -46,10 +46,10 @@ impl Cli {
         let command = self.command.unwrap_or_default();
 
         match command {
-            Commands::Auth(cmd) => cmd.execute(&profile).await,
-            Commands::Config(cmd) => cmd.execute(&profile).await,
-            Commands::Web(cmd) => cmd.execute(&profile).await,
-            Commands::Completion(cmd) => {
+            Subcommand::Auth(cmd) => cmd.execute(&profile).await,
+            Subcommand::Config(cmd) => cmd.execute(&profile).await,
+            Subcommand::Web(cmd) => cmd.execute(&profile).await,
+            Subcommand::Completion(cmd) => {
                 cmd.execute();
                 Ok(())
             }
@@ -71,7 +71,7 @@ mod tests {
         };
 
         match cli.command.unwrap_or_default() {
-            Commands::Auth(cmd) => assert_eq!(cmd.role, None),
+            Subcommand::Auth(cmd) => assert_eq!(cmd.role, None),
             _ => panic!("Expected Auth command as default"),
         }
     }
@@ -81,13 +81,13 @@ mod tests {
         let cli = Cli {
             profile: "test".to_string(),
             verbose: 0,
-            command: Some(Commands::Auth(AuthCommand {
+            command: Some(Subcommand::Auth(AuthCommand {
                 role: Some("AdminRole".to_string()),
             })),
         };
 
         match cli.command {
-            Some(Commands::Auth(cmd)) => {
+            Some(Subcommand::Auth(cmd)) => {
                 assert_eq!(cmd.role, Some("AdminRole".to_string()));
             }
             _ => panic!("Expected Auth command"),
@@ -99,11 +99,11 @@ mod tests {
         let cli = Cli {
             profile: "test".to_string(),
             verbose: 0,
-            command: Some(Commands::Auth(AuthCommand { role: None })),
+            command: Some(Subcommand::Auth(AuthCommand { role: None })),
         };
 
         match cli.command {
-            Some(Commands::Auth(cmd)) => {
+            Some(Subcommand::Auth(cmd)) => {
                 assert_eq!(cmd.role, None);
             }
             _ => panic!("Expected Auth command"),
@@ -132,7 +132,7 @@ mod tests {
     fn test_auth_with_role_parsing() {
         let cli = Cli::try_parse_from(["assam", "auth", "--role", "Developer"]).unwrap();
         match cli.command {
-            Some(Commands::Auth(cmd)) => {
+            Some(Subcommand::Auth(cmd)) => {
                 assert_eq!(cmd.role, Some("Developer".to_string()));
             }
             _ => panic!("Expected Auth command"),
@@ -143,7 +143,7 @@ mod tests {
     fn test_auth_with_role_short_flag() {
         let cli = Cli::try_parse_from(["assam", "auth", "-r", "Admin"]).unwrap();
         match cli.command {
-            Some(Commands::Auth(cmd)) => {
+            Some(Subcommand::Auth(cmd)) => {
                 assert_eq!(cmd.role, Some("Admin".to_string()));
             }
             _ => panic!("Expected Auth command"),
@@ -153,19 +153,19 @@ mod tests {
     #[test]
     fn test_config_command_parsing() {
         let cli = Cli::try_parse_from(["assam", "config"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Config(_))));
+        assert!(matches!(cli.command, Some(Subcommand::Config(_))));
     }
 
     #[test]
     fn test_web_command_parsing() {
         let cli = Cli::try_parse_from(["assam", "web"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Web(_))));
+        assert!(matches!(cli.command, Some(Subcommand::Web(_))));
     }
 
     #[test]
     fn test_completion_command_parsing() {
         let cli = Cli::try_parse_from(["assam", "completion", "bash"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Completion(_))));
+        assert!(matches!(cli.command, Some(Subcommand::Completion(_))));
     }
 
     #[test]

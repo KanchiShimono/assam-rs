@@ -4,7 +4,7 @@ use clap::Args;
 use tracing::info;
 
 use crate::{
-    aws::{self, AvailableRoles},
+    aws::{self, roles::AvailableRoles},
     browser::{BrowserAutomation, ChromeBrowser},
     config,
     idp::{IdentityProvider, azure::AzureProvider},

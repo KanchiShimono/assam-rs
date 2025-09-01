@@ -16,6 +16,3 @@ pub(crate) struct Credentials {
     pub session_token: String,
     pub expiration: DateTime,
 }
-
-// Re-export commonly used types (functions should be accessed via module path)
-pub(crate) use roles::{AvailableRoles, IamRole};

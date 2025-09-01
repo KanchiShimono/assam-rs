@@ -17,7 +17,7 @@ const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
 /// Browser automation trait for SAML authentication flows
 // Allow async fn in trait: このトレイトは内部実装用でSend境界は不要なため
 #[allow(async_fn_in_trait)]
-pub trait BrowserAutomation {
+pub(crate) trait BrowserAutomation {
     /// Capture SAML response through browser authentication
     async fn capture_saml_response<F>(
         &self,
@@ -29,14 +29,14 @@ pub trait BrowserAutomation {
 }
 
 /// Chrome browser implementation
-pub struct ChromeBrowser {
+pub(crate) struct ChromeBrowser {
     user_data_dir: PathBuf,
     timeout: Duration,
 }
 
 impl ChromeBrowser {
     /// Create a new Chrome browser instance
-    pub fn new(user_data_dir: PathBuf) -> Self {
+    pub(crate) fn new(user_data_dir: PathBuf) -> Self {
         Self {
             user_data_dir,
             timeout: BROWSER_TIMEOUT,
@@ -44,7 +44,7 @@ impl ChromeBrowser {
     }
 
     /// Create with custom timeout
-    pub fn with_timeout(user_data_dir: PathBuf, timeout: Duration) -> Self {
+    pub(crate) fn with_timeout(user_data_dir: PathBuf, timeout: Duration) -> Self {
         Self {
             user_data_dir,
             timeout,

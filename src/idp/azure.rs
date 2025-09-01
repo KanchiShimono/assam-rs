@@ -1,17 +1,17 @@
 /// Azure Entra ID (formerly Azure AD) provider implementation
 #[derive(Debug, Clone)]
-pub struct AzureProvider {
+pub(crate) struct AzureProvider {
     tenant_id: String,
 }
 
 impl AzureProvider {
     /// Create a new Azure provider with the specified tenant ID
-    pub fn new(tenant_id: String) -> Self {
+    pub(crate) fn new(tenant_id: String) -> Self {
         Self { tenant_id }
     }
 
     /// Build SAML authentication URL with the provided SAML request
-    pub fn build_auth_url(&self, saml_request: &str) -> String {
+    pub(crate) fn build_auth_url(&self, saml_request: &str) -> String {
         format!(
             "https://login.microsoftonline.com/{}/saml2?SAMLRequest={}",
             self.tenant_id,

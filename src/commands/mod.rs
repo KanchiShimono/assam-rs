@@ -1,9 +1,9 @@
-pub mod auth;
-pub mod completion;
-pub mod config;
-pub mod web;
+mod auth;
+mod completion;
+mod config;
+mod web;
 
-pub use auth::AuthCommand;
-pub use completion::CompletionCommand;
-pub use config::ConfigCommand;
-pub use web::WebCommand;
+pub(crate) use auth::AuthCommand;
+pub(crate) use completion::CompletionCommand;
+pub(crate) use config::ConfigCommand;
+pub(crate) use web::WebCommand;

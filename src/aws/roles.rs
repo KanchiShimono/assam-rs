@@ -5,7 +5,7 @@ use crate::saml::SamlResponse;
 
 /// AWS IAM Role structure
 #[derive(Debug, Clone)]
-pub struct IamRole {
+pub(crate) struct IamRole {
     pub name: String,
     pub role_arn: String,
     pub principal_arn: String,
@@ -13,7 +13,7 @@ pub struct IamRole {
 
 /// SAMLアサーションで利用可能なIAMロール（空の状態を型レベルで排除）
 #[derive(Debug, Clone)]
-pub enum AvailableRoles {
+pub(crate) enum AvailableRoles {
     /// 単一ロール（自動選択可能）
     Single(IamRole),
     /// 複数ロール（明示的な選択が必要）

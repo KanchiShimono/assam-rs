@@ -56,7 +56,7 @@ fn get_aws_config_path() -> Option<PathBuf> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Config {
+pub(crate) struct Config {
     pub app_id_uri: String,
     pub azure_tenant_id: String,
     pub default_session_duration_hours: u8,
@@ -113,7 +113,7 @@ impl Config {
     }
 }
 
-pub async fn load(profile: &str) -> Result<Config> {
+pub(crate) async fn load(profile: &str) -> Result<Config> {
     let path = get_config_path()?;
     let ini = Ini::load_from_file(&path)
         .context("Failed to load config file. Please run `assam config` first")?;
@@ -131,7 +131,7 @@ pub async fn load(profile: &str) -> Result<Config> {
     Ok(Config::from_ini_section(section))
 }
 
-pub async fn save(profile: &str, config: &Config) -> Result<()> {
+pub(crate) async fn save(profile: &str, config: &Config) -> Result<()> {
     let path = get_config_path()?;
 
     if let Some(parent) = path.parent() {
@@ -154,7 +154,7 @@ pub async fn save(profile: &str, config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn configure_interactive(profile: &str) -> Result<()> {
+pub(crate) async fn configure_interactive(profile: &str) -> Result<()> {
     println!("Configuring assam for profile: {profile}");
 
     let existing_config = load(profile).await.ok();

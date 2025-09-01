@@ -4,10 +4,10 @@ use clap::Args;
 use crate::aws;
 
 #[derive(Debug, Default, Clone, Args)]
-pub struct WebCommand {}
+pub(crate) struct WebCommand {}
 
 impl WebCommand {
-    pub async fn execute(self, profile: &str) -> Result<()> {
+    pub(crate) async fn execute(self, profile: &str) -> Result<()> {
         aws::console::open_console(profile).await
     }
 }

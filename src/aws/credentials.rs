@@ -20,7 +20,7 @@ fn get_aws_credentials_path() -> Option<PathBuf> {
 }
 
 /// Save credentials to AWS credentials file
-pub async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> {
+pub(crate) async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> {
     let path = get_aws_credentials_path().context("Failed to determine AWS credentials path")?;
 
     if let Some(parent) = path.parent() {
@@ -63,7 +63,7 @@ pub async fn save_credentials(profile: &str, creds: &Credentials) -> Result<()> 
 }
 
 /// Load credentials from AWS credentials file
-pub async fn load_credentials(profile: &str) -> Result<Credentials> {
+pub(crate) async fn load_credentials(profile: &str) -> Result<Credentials> {
     let path = get_aws_credentials_path().context("Failed to determine AWS credentials path")?;
 
     let ini = match path.exists() {

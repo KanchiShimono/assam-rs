@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 /// SAML request configuration
 #[derive(Debug, Clone)]
-pub struct SamlRequest {
+pub(crate) struct SamlRequest {
     /// The entity that issues the SAML request (typically the application identifier)
     pub issuer: String,
     /// The URL where SAML responses should be sent (Assertion Consumer Service URL)
@@ -18,7 +18,7 @@ pub struct SamlRequest {
 
 impl SamlRequest {
     /// Generate SAML authentication request XML and encode it
-    pub fn generate(&self) -> Result<String> {
+    pub(crate) fn generate(&self) -> Result<String> {
         let id = format!("id_{}", Uuid::new_v4());
         let instant = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
 
@@ -42,13 +42,13 @@ impl SamlRequest {
 
 /// SAML response (provider-independent)
 #[derive(Debug)]
-pub struct SamlResponse {
+pub(crate) struct SamlResponse {
     decoded_xml: Vec<u8>,
 }
 
 impl SamlResponse {
     /// Create from Base64-encoded response
-    pub fn from_base64(encoded: &str) -> Result<Self> {
+    pub(crate) fn from_base64(encoded: &str) -> Result<Self> {
         let decoded = STANDARD
             .decode(encoded)
             .context("Failed to decode SAML response from base64")?;
@@ -58,7 +58,7 @@ impl SamlResponse {
     }
 
     /// Get attribute values by name (generic attribute extraction)
-    pub fn get_attribute_values(&self, attribute_name: &str) -> Result<Vec<String>> {
+    pub(crate) fn get_attribute_values(&self, attribute_name: &str) -> Result<Vec<String>> {
         let mut reader = Reader::from_reader(self.decoded_xml.as_slice());
         reader.config_mut().trim_text(true);
 
@@ -99,7 +99,7 @@ impl SamlResponse {
     }
 
     /// Get the raw decoded XML content
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         &self.decoded_xml
     }
 }

@@ -42,14 +42,6 @@ impl ChromeBrowser {
             timeout: BROWSER_TIMEOUT,
         }
     }
-
-    /// Create with custom timeout
-    pub(crate) fn with_timeout(user_data_dir: PathBuf, timeout: Duration) -> Self {
-        Self {
-            user_data_dir,
-            timeout,
-        }
-    }
 }
 
 impl BrowserAutomation for ChromeBrowser {

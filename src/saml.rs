@@ -97,11 +97,6 @@ impl SamlResponse {
 
         Ok(values)
     }
-
-    /// Get the raw decoded XML content
-    pub(crate) fn as_bytes(&self) -> &[u8] {
-        &self.decoded_xml
-    }
 }
 
 /// Deflate compress and Base64 encode SAML request
@@ -161,8 +156,6 @@ mod tests {
 
         let encoded = STANDARD.encode(xml.as_bytes());
         let response = SamlResponse::from_base64(&encoded).unwrap();
-
-        assert!(!response.as_bytes().is_empty());
 
         // Test attribute extraction
         let values = response.get_attribute_values("test-attribute").unwrap();

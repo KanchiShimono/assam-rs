@@ -123,7 +123,7 @@ where
 
     // Start monitoring network events
     let page_clone = page.clone();
-    tokio::spawn(async move {
+    let monitor_task = tokio::spawn(async move {
         if let Ok(mut events) = page_clone.event_listener::<EventRequestWillBeSent>().await {
             while let Some(event) = events.next().await {
                 if is_target(&event.request.url)
@@ -142,8 +142,14 @@ where
     info!("Browser opened. Please complete authentication in the browser window.");
 
     // Wait for SAML response
-    rx.await
-        .map_err(|_| anyhow!("SAML response channel closed"))
+    let result = rx
+        .await
+        .map_err(|_| anyhow!("SAML response channel closed"));
+
+    // Abort the monitor task if it's still running
+    monitor_task.abort();
+
+    result
 }
 
 /// Extract SAML response from a network request

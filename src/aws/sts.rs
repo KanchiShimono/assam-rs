@@ -6,7 +6,7 @@ use tracing::{debug, info};
 use super::{Credentials, DEFAULT_AWS_REGION};
 
 /// Assume role using SAML assertion
-pub async fn assume_role_with_saml(
+pub(crate) async fn assume_role_with_saml(
     profile: &str,
     saml_assertion: &str,
     role_arn: &str,

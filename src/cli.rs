@@ -13,17 +13,17 @@ pub struct Cli {
         default_value = "default",
         help = "AWS profile name"
     )]
-    pub profile: String,
+    profile: String,
 
     #[arg(short = 'v', long, global = true, action = ArgAction::Count, help = "Increase verbosity (-v info, -vv debug, -vvv trace)")]
     pub verbose: u8,
 
     #[command(subcommand)]
-    pub command: Option<Subcommand>,
+    command: Option<Subcommand>,
 }
 
 #[derive(Debug, Clone, clap::Subcommand)]
-pub enum Subcommand {
+enum Subcommand {
     #[command(about = "Authenticate with AWS using SAML via Azure Entra ID")]
     Auth(AuthCommand),
     #[command(about = "Configure Azure Entra ID and AWS settings")]

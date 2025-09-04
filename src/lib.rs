@@ -1,7 +1,7 @@
-pub mod aws;
-pub mod browser;
+mod aws;
+mod browser;
 pub mod cli;
-pub mod commands;
-pub mod config;
-pub mod idp;
-pub mod saml;
+mod commands;
+mod config;
+mod idp;
+mod saml;

@@ -17,7 +17,7 @@ const BROWSER_TIMEOUT: Duration = Duration::from_secs(300);
 /// Browser automation trait for SAML authentication flows
 // Allow async fn in trait: このトレイトは内部実装用でSend境界は不要なため
 #[allow(async_fn_in_trait)]
-pub trait BrowserAutomation {
+pub(crate) trait BrowserAutomation {
     /// Capture SAML response through browser authentication
     async fn capture_saml_response<F>(
         &self,
@@ -29,25 +29,17 @@ pub trait BrowserAutomation {
 }
 
 /// Chrome browser implementation
-pub struct ChromeBrowser {
+pub(crate) struct ChromeBrowser {
     user_data_dir: PathBuf,
     timeout: Duration,
 }
 
 impl ChromeBrowser {
     /// Create a new Chrome browser instance
-    pub fn new(user_data_dir: PathBuf) -> Self {
+    pub(crate) fn new(user_data_dir: PathBuf) -> Self {
         Self {
             user_data_dir,
             timeout: BROWSER_TIMEOUT,
-        }
-    }
-
-    /// Create with custom timeout
-    pub fn with_timeout(user_data_dir: PathBuf, timeout: Duration) -> Self {
-        Self {
-            user_data_dir,
-            timeout,
         }
     }
 }
@@ -123,7 +115,7 @@ where
 
     // Start monitoring network events
     let page_clone = page.clone();
-    tokio::spawn(async move {
+    let monitor_task = tokio::spawn(async move {
         if let Ok(mut events) = page_clone.event_listener::<EventRequestWillBeSent>().await {
             while let Some(event) = events.next().await {
                 if is_target(&event.request.url)
@@ -142,8 +134,14 @@ where
     info!("Browser opened. Please complete authentication in the browser window.");
 
     // Wait for SAML response
-    rx.await
-        .map_err(|_| anyhow!("SAML response channel closed"))
+    let result = rx
+        .await
+        .map_err(|_| anyhow!("SAML response channel closed"));
+
+    // Abort the monitor task if it's still running
+    monitor_task.abort();
+
+    result
 }
 
 /// Extract SAML response from a network request

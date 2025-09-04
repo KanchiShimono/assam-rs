@@ -30,7 +30,7 @@ struct SigninTokenResponse {
 }
 
 /// Open AWS Management Console in browser
-pub async fn open_console(profile: &str) -> Result<()> {
+pub(crate) async fn open_console(profile: &str) -> Result<()> {
     let creds = credentials::load_credentials(profile).await?;
 
     // Load AWS config to get the region for this profile

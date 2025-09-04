@@ -4,13 +4,13 @@ use clap_complete::Shell;
 use crate::cli::Cli;
 
 #[derive(Debug, Clone, Args)]
-pub struct CompletionCommand {
+pub(crate) struct CompletionCommand {
     #[arg(value_enum, help = "Target shell for completion script")]
     pub shell: Shell,
 }
 
 impl CompletionCommand {
-    pub fn execute(self) {
+    pub(crate) fn execute(self) {
         let mut cmd = Cli::command();
         let app_name = cmd.get_name().to_string();
         clap_complete::generate(self.shell, &mut cmd, app_name, &mut std::io::stdout());

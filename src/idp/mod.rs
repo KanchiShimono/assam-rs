@@ -1,11 +1,11 @@
-pub mod azure;
+pub(crate) mod azure;
 
 use self::azure::AzureProvider;
 
 /// Identity Provider enum using composition pattern
 /// Each variant contains a provider-specific struct with its own implementation
 #[derive(Debug, Clone)]
-pub enum IdentityProvider {
+pub(crate) enum IdentityProvider {
     Azure(AzureProvider),
     // Future: Okta(okta::OktaProvider),
     // Future: Google(google::GoogleProvider),

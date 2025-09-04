@@ -1,11 +1,10 @@
 use anyhow::{Context, Result, bail};
-use std::slice::Iter;
 
 use crate::saml::SamlResponse;
 
 /// AWS IAM Role structure
 #[derive(Debug, Clone)]
-pub struct IamRole {
+pub(crate) struct IamRole {
     pub name: String,
     pub role_arn: String,
     pub principal_arn: String,
@@ -13,7 +12,7 @@ pub struct IamRole {
 
 /// SAMLアサーションで利用可能なIAMロール（空の状態を型レベルで排除）
 #[derive(Debug, Clone)]
-pub enum AvailableRoles {
+pub(crate) enum AvailableRoles {
     /// 単一ロール（自動選択可能）
     Single(IamRole),
     /// 複数ロール（明示的な選択が必要）
@@ -79,27 +78,6 @@ impl AvailableRoles {
                     }
                 }
             }
-        }
-    }
-
-    /// Get all roles as a slice
-    pub fn as_slice(&self) -> &[IamRole] {
-        match self {
-            AvailableRoles::Single(role) => std::slice::from_ref(role),
-            AvailableRoles::Multiple(roles) => roles.as_slice(),
-        }
-    }
-
-    /// Get all roles as an iterator
-    pub fn iter(&self) -> Iter<'_, IamRole> {
-        self.as_slice().iter()
-    }
-
-    /// Get all role names
-    pub fn role_names(&self) -> Vec<&str> {
-        match self {
-            AvailableRoles::Single(role) => vec![role.name.as_str()],
-            AvailableRoles::Multiple(roles) => roles.iter().map(|r| r.name.as_str()).collect(),
         }
     }
 }
@@ -183,8 +161,11 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("does not match"));
 
-        // Test utility methods
-        assert_eq!(available.role_names(), vec!["TestRole"]);
+        // Test that single role is properly handled
+        match &available {
+            AvailableRoles::Single(role) => assert_eq!(role.name, "TestRole"),
+            _ => panic!("Expected Single variant"),
+        }
     }
 
     #[test]
@@ -222,11 +203,14 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
-        // Test utility methods
-        assert_eq!(available.role_names(), vec!["Role1", "Role2"]);
-
-        // Test iterator
-        let role_names: Vec<&str> = available.iter().map(|r| r.name.as_str()).collect();
-        assert_eq!(role_names, vec!["Role1", "Role2"]);
+        // Test that multiple roles are properly handled
+        match &available {
+            AvailableRoles::Multiple(roles) => {
+                assert_eq!(roles.len(), 2);
+                assert_eq!(roles[0].name, "Role1");
+                assert_eq!(roles[1].name, "Role2");
+            }
+            _ => panic!("Expected Multiple variant"),
+        }
     }
 }

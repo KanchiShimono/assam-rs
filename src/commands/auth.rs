@@ -4,7 +4,7 @@ use clap::Args;
 use tracing::info;
 
 use crate::{
-    aws::{self, AvailableRoles},
+    aws::{self, roles::AvailableRoles},
     browser::{BrowserAutomation, ChromeBrowser},
     config,
     idp::{IdentityProvider, azure::AzureProvider},
@@ -15,13 +15,13 @@ use crate::{
 const AWS_SAML_ENDPOINT: &str = "https://signin.aws.amazon.com/saml";
 
 #[derive(Debug, Default, Clone, Args)]
-pub struct AuthCommand {
+pub(crate) struct AuthCommand {
     #[arg(short = 'r', long, help = "AWS IAM role name to assume")]
     pub role: Option<String>,
 }
 
 impl AuthCommand {
-    pub async fn execute(self, profile: &str) -> Result<()> {
+    pub(crate) async fn execute(self, profile: &str) -> Result<()> {
         info!("Starting authentication for profile: {}", profile);
 
         // Load configuration
